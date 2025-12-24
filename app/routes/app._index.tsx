@@ -49,18 +49,18 @@ export default function Index() {
     <Page title="MM Gestion Pros Santé">
       <Layout>
         <Layout.Section>
-          {/* Message de succès après création */}
+          {/* Message de succès après création - version compacte */}
           {success === "created" && (
             <Banner
               tone="success"
-              title="Structure créée avec succès !"
+              title="✓ Structure créée"
               onDismiss={() => {
                 const newParams = new URLSearchParams(searchParams);
                 newParams.delete("success");
                 setSearchParams(newParams);
               }}
             >
-              <p>Le métaobjet &quot;MM Pro de santé&quot; a été créé avec succès. La structure est maintenant prête !</p>
+              <Text as="span" variant="bodySm">Prête à l&apos;emploi</Text>
             </Banner>
           )}
           
