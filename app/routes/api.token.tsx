@@ -1,29 +1,32 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { json } from "react-router";
 import { authenticate } from "../shopify.server";
-import crypto from "crypto";
 
 /**
- * Route API pour générer un token temporaire sécurisé pour la page externe
- * Ce token permet à la page externe d'appeler l'API Shopify
+ * Route API pour obtenir le token d'accès Shopify
+ * Utilisée par la page externe pour appeler l'API Shopify
+ * 
+ * GET /api/token
+ * Retourne: { shop: string, token: string }
  */
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  
-  // Générer un token temporaire (valide 1 heure)
-  // En production, utilisez JWT ou un système de tokens plus robuste
-  const token = crypto.randomBytes(32).toString("hex");
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 heure
-  
-  // TODO: Stocker le token dans une base de données avec session.shop et expiresAt
-  // Pour l'instant, on retourne directement l'accessToken (à améliorer en production)
-  
-  return json({
-    token: session.accessToken, // En production, retournez le token temporaire
-    shop: session.shop,
-    expiresAt: expiresAt.toISOString(),
-    // Note: En production, la page externe devra échanger ce token
-    // contre l'accessToken via une autre route API sécurisée
-  });
+  try {
+    const { session } = await authenticate.admin(request);
+    
+    // ⚠️ SÉCURITÉ: En production, générez un token temporaire (JWT)
+    // et stockez-le dans une base de données avec expiration
+    // Ne retournez JAMAIS directement l'accessToken en production
+    
+    return json({
+      shop: session.shop,
+      token: session.accessToken, // ⚠️ À remplacer par un token temporaire en production
+      // expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 heure
+    });
+  } catch (error) {
+    return json(
+      { error: "Non authentifié" },
+      { status: 401 }
+    );
+  }
 };
 
