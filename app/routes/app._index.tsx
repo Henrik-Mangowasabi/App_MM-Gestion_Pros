@@ -6,16 +6,12 @@ import { authenticate } from "../shopify.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   
-  // Générer un token temporaire sécurisé pour la page externe
-  // Dans un vrai projet, utilisez JWT ou un système de tokens temporaires
+  // URL de votre page externe
   const externalUrl = process.env.EXTERNAL_APP_URL || "http://localhost:3001";
-  const token = session.accessToken; // En production, générez un token temporaire
   
   return { 
     externalUrl,
     shop: session.shop,
-    // Note: En production, ne passez JAMAIS le token directement
-    // Utilisez plutôt un système de tokens temporaires ou JWT
   };
 };
 
@@ -27,9 +23,11 @@ export default function Index() {
       <Layout>
         <Layout.Section>
           <Card>
-            <Text as="p" variant="bodyMd" tone="subdued" style={{ marginBottom: "1rem" }}>
-              Gestion de votre boutique : {shop}
-            </Text>
+            <div style={{ marginBottom: "1rem" }}>
+              <Text as="p" variant="bodyMd" tone="subdued">
+                Gestion de votre boutique : {shop}
+              </Text>
+            </div>
             
             {/* Option 1: Iframe (si la page externe autorise) */}
             <div style={{ width: "100%", height: "800px", border: "1px solid #e1e3e5", borderRadius: "8px" }}>
