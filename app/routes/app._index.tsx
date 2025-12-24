@@ -11,8 +11,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
 
   try {
-    // 1. Vérification simplifiée du Metaobject
+    // 1. Vérifier si le Metaobject existe
     const checkMO = await admin.graphql(`
+      #graphql
       query {
         metaobjectDefinitionByType(type: "mm_pro_de_sante") {
           id
@@ -22,8 +23,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const moData: any = await checkMO.json();
     const moExists = !!moData.data?.metaobjectDefinitionByType;
 
-    // 2. Récupération des données (Pros, Codes, Clients)
+    // 2. Récupérer les données pour les 3 onglets
     const response = await admin.graphql(`
+      #graphql
       query {
         metaobjects(type: "mm_pro_de_sante", first: 10) {
           nodes {
@@ -51,8 +53,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       discounts: data.data?.discountNodes?.nodes || [],
       customers: data.data?.customers?.nodes || [],
     });
-  } catch (error) {
-    // Si la requête échoue (ex: pas encore de droits), on renvoie des tableaux vides
+  } catch (err) {
     return json({ moExists: false, pros: [], discounts: [], customers: [] });
   }
 };
@@ -62,7 +63,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const formData = await request.formData();
 
   if (formData.get("intent") === "create_structure") {
-    await admin.graphql(`
+    const res = await admin.graphql(`
+      #graphql
       mutation CreateDef($definition: MetaobjectDefinitionCreateInput!) {
         metaobjectDefinitionCreate(definition: $definition) {
           metaobjectDefinition { type }
@@ -91,8 +93,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       }
     });
+    return json({ ok: true });
   }
-  return json({ ok: true });
+  return null;
 };
 
 export default function Index() {
@@ -114,7 +117,7 @@ export default function Index() {
           {!moExists && (
             <Banner title="Structure manquante" tone="warning">
               <BlockStack gap="200">
-                <Text as="p">Le Metaobject <b>mm_pro_de_sante</b> doit être configuré.</Text>
+                <Text as="p">Le Metaobject <b>mm_pro_de_sante</b> n'est pas configuré.</Text>
                 <Button 
                   onClick={() => submit({ intent: "create_structure" }, { method: "post" })}
                   loading={navigation.state === "submitting"}
@@ -150,9 +153,9 @@ export default function Index() {
                     items={discounts}
                     renderItem={(item: any) => (
                       <ResourceItem id={item.id} onClick={() => {}}>
-                        <Text as="h3" variant="bodyMd" fontWeight="bold">{item.discount?.title || "Promo"}</Text>
+                        <Text as="h3" variant="bodyMd" fontWeight="bold">{item.discount?.title || "Code Promo"}</Text>
                         <Badge tone={item.discount?.status === 'ACTIVE' ? 'success' : 'attention'}>
-                          {item.discount?.status || 'Inactif'}
+                          {item.discount?.status || 'INACTIF'}
                         </Badge>
                       </ResourceItem>
                     )}
