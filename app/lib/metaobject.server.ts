@@ -7,17 +7,13 @@ const METAOBJECT_NAME = "MM Pro de santé";
  * Vérifie si le métaobjet existe
  */
 export async function checkMetaobjectExists(admin: AdminApiContext): Promise<boolean> {
-  // Utiliser une requête plus large pour être sûr de trouver le métaobjet
+  // Utiliser la méthode simple avec metaobjectDefinition
   const query = `
     query {
-      metaobjectDefinitions(first: 10, types: ["${METAOBJECT_TYPE}"]) {
-        edges {
-          node {
-            id
-            name
-            type
-          }
-        }
+      metaobjectDefinition(type: "${METAOBJECT_TYPE}") {
+        id
+        name
+        type
       }
     }
   `;
@@ -26,39 +22,17 @@ export async function checkMetaobjectExists(admin: AdminApiContext): Promise<boo
     const response = await admin.graphql(query);
     const data = await response.json() as {
       data?: {
-        metaobjectDefinitions?: {
-          edges?: Array<{
-            node?: {
-              id: string;
-              name: string;
-              type: string;
-            };
-          }>;
+        metaobjectDefinition?: {
+          id: string;
+          name: string;
+          type: string;
         };
       };
     };
-    
-    const definitions = data.data?.metaobjectDefinitions?.edges || [];
-    return definitions.some(edge => edge.node?.type === METAOBJECT_TYPE);
+    return !!data.data?.metaobjectDefinition;
   } catch (error) {
     console.error("Erreur lors de la vérification du métaobjet:", error);
-    // Essayer avec l'ancienne méthode en fallback
-    try {
-      const fallbackQuery = `
-        query {
-          metaobjectDefinition(type: "${METAOBJECT_TYPE}") {
-            id
-            name
-            type
-          }
-        }
-      `;
-      const fallbackResponse = await admin.graphql(fallbackQuery);
-      const fallbackData = await fallbackResponse.json();
-      return !!fallbackData.data?.metaobjectDefinition;
-    } catch {
-      return false;
-    }
+    return false;
   }
 }
 
