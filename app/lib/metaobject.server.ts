@@ -90,9 +90,14 @@ export async function createMetaobject(admin: AdminApiContext): Promise<{ succes
     }
   `;
 
-  // Construction des fieldDefinitions au format GraphQL
+  // Construction des fieldDefinitions au format GraphQL (sans validations pour éviter les erreurs)
   const graphqlFieldDefinitions = fieldDefinitions.map(field => {
-    const base: any = {
+    const base: {
+      name: string;
+      key: string;
+      required: boolean;
+      type?: string;
+    } = {
       name: field.name,
       key: field.key,
       required: field.required
@@ -100,21 +105,12 @@ export async function createMetaobject(admin: AdminApiContext): Promise<{ succes
 
     if (field.type === "single_line_text_field") {
       base.type = "single_line_text_field";
-      if (field.unique) {
-        base.validations = [{ name: "unique" }];
-      }
+      // On enlève les validations unique pour l'instant
     } else if (field.type === "number_decimal") {
       base.type = "number_decimal";
     } else if (field.type === "list.single_line_text_field") {
-      // Pour les listes de choix, format simplifié
       base.type = "list.single_line_text_field";
-      // Les choix sont définis différemment dans l'API
-      if (field.choices && field.choices.length > 0) {
-        base.validations = [{
-          name: "choices",
-          value: field.choices.join(",")
-        }];
-      }
+      // On enlève les validations choices pour l'instant
     }
     
     return base;
@@ -135,7 +131,15 @@ export async function createMetaobject(admin: AdminApiContext): Promise<{ succes
 
   try {
     const response = await admin.graphql(mutation, { variables });
-    const data = await response.json();
+    const data = await response.json() as {
+      errors?: Array<{ message: string }>;
+      data?: {
+        metaobjectDefinitionCreate?: {
+          metaobjectDefinition?: { id: string; name: string; type: string };
+          userErrors?: Array<{ field: string[]; message: string }>;
+        };
+      };
+    };
     
     if (data.errors) {
       return { success: false, error: JSON.stringify(data.errors) };
@@ -160,36 +164,19 @@ export async function createMetaobject(admin: AdminApiContext): Promise<{ succes
 }
 
 /**
- * Vérifie et crée le métaobjet si nécessaire
+ * Vérifie si le métaobjet existe (sans le créer)
  */
-export async function ensureMetaobjectExists(admin: AdminApiContext): Promise<{
+export async function checkMetaobjectStatus(admin: AdminApiContext): Promise<{
   exists: boolean;
-  created: boolean;
   error?: string;
 }> {
   try {
     const exists = await checkMetaobjectExists(admin);
-    
-    if (exists) {
-      return { exists: true, created: false };
-    }
-
-    const result = await createMetaobject(admin);
-    
-    if (result.success) {
-      return { exists: false, created: true };
-    }
-
-    return { 
-      exists: false, 
-      created: false, 
-      error: result.error || "Impossible de créer le métaobjet" 
-    };
+    return { exists };
   } catch (error) {
-    console.error("Erreur dans ensureMetaobjectExists:", error);
+    console.error("Erreur dans checkMetaobjectStatus:", error);
     return { 
       exists: false, 
-      created: false, 
       error: error instanceof Error ? error.message : "Erreur inconnue" 
     };
   }
