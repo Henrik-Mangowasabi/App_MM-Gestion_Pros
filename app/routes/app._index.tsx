@@ -73,7 +73,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       type,
     });
     if (result.success) {
-      return redirect("/app");
+      const url = new URL(request.url);
+      return redirect(url.pathname + url.search);
     }
     return { error: result.error || "Erreur lors de la création de l'entrée" };
   }
@@ -118,7 +119,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     const result = await updateMetaobjectEntry(admin, id, updateFields);
     if (result.success) {
-      return redirect("/app");
+      const url = new URL(request.url);
+      return redirect(url.pathname + url.search);
     }
     return { error: result.error || "Erreur lors de la modification" };
   }
@@ -128,7 +130,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const id = formData.get("id") as string;
     const result = await deleteMetaobjectEntry(admin, id);
     if (result.success) {
-      return redirect("/app");
+      const url = new URL(request.url);
+      return redirect(url.pathname + url.search);
     }
     return { error: result.error || "Erreur lors de la suppression" };
   }
@@ -154,7 +157,11 @@ function EntryRow({ entry, index }: {
     setEditing({ field, value: String(currentValue || "") });
   };
 
-  const handleSave = (field: string) => {
+  const handleSave = (field: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     const form = document.createElement("form");
     form.method = "post";
     form.innerHTML = `
@@ -185,7 +192,8 @@ function EntryRow({ entry, index }: {
               style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
             />
             <button
-              onClick={() => handleSave("identification")}
+              type="button"
+              onClick={(e) => handleSave("identification", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -201,7 +209,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.identification || "-"}</span>
             <button
-              onClick={() => handleEdit("identification", entry.identification)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("identification", entry.identification);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -220,7 +233,8 @@ function EntryRow({ entry, index }: {
               style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
             />
             <button
-              onClick={() => handleSave("name")}
+              type="button"
+              onClick={(e) => handleSave("name", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -236,7 +250,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.name || "-"}</span>
             <button
-              onClick={() => handleEdit("name", entry.name)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("name", entry.name);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -255,7 +274,8 @@ function EntryRow({ entry, index }: {
               style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
             />
             <button
-              onClick={() => handleSave("email")}
+              type="button"
+              onClick={(e) => handleSave("email", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -271,7 +291,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.email || "-"}</span>
             <button
-              onClick={() => handleEdit("email", entry.email)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("email", entry.email);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -290,7 +315,8 @@ function EntryRow({ entry, index }: {
               style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
             />
             <button
-              onClick={() => handleSave("code")}
+              type="button"
+              onClick={(e) => handleSave("code", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -306,7 +332,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.code || "-"}</span>
             <button
-              onClick={() => handleEdit("code", entry.code)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("code", entry.code);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -326,7 +357,8 @@ function EntryRow({ entry, index }: {
               style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
             />
             <button
-              onClick={() => handleSave("montant")}
+              type="button"
+              onClick={(e) => handleSave("montant", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -342,7 +374,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.montant !== undefined ? entry.montant : "-"}</span>
             <button
-              onClick={() => handleEdit("montant", entry.montant)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("montant", entry.montant);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -363,7 +400,8 @@ function EntryRow({ entry, index }: {
               <option value="€">€</option>
             </select>
             <button
-              onClick={() => handleSave("type")}
+              type="button"
+              onClick={(e) => handleSave("type", e)}
               style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
             >
               ✓
@@ -379,7 +417,12 @@ function EntryRow({ entry, index }: {
           <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
             <span>{entry.type || "-"}</span>
             <button
-              onClick={() => handleEdit("type", entry.type)}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleEdit("type", entry.type);
+              }}
               style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
               title="Modifier"
             >
@@ -469,26 +512,26 @@ export default function Index() {
             </h2>
             
             <div style={{ overflowX: "auto" }}>
-              <Form method="post">
-                <input type="hidden" name="action" value="create_entry" />
-                <table style={{
-                  width: "100%",
-                  borderCollapse: "collapse"
-                }}>
-                  <thead>
-                    <tr style={{ backgroundColor: "#f8f8f8" }}>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>ID</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Identification</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Code</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Montant</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Type</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {/* Ligne pour ajouter une nouvelle entrée */}
+              <table style={{
+                width: "100%",
+                borderCollapse: "collapse"
+              }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f8f8f8" }}>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>ID</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Identification</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Code</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Montant</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Type</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Ligne pour ajouter une nouvelle entrée */}
+                  <Form method="post">
+                    <input type="hidden" name="action" value="create_entry" />
                     <tr style={{ backgroundColor: "#f0f8ff", borderBottom: "2px solid #ddd" }}>
                       <td style={{ padding: "8px", color: "#666", fontSize: "0.9em" }}>Nouveau</td>
                       <td style={{ padding: "8px" }}>
@@ -564,6 +607,7 @@ export default function Index() {
                         </button>
                       </td>
                     </tr>
+                  </Form>
                   
                   {/* Lignes existantes */}
                   {entries.map((entry, index) => (
@@ -571,7 +615,6 @@ export default function Index() {
                   ))}
                 </tbody>
               </table>
-              </Form>
             </div>
           </div>
         </div>
