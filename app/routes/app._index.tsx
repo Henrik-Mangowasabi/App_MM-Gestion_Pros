@@ -162,14 +162,36 @@ function EntryRow({ entry, index }: {
       e.preventDefault();
       e.stopPropagation();
     }
+    // Créer un formulaire et le soumettre
     const form = document.createElement("form");
     form.method = "post";
-    form.innerHTML = `
-      <input type="hidden" name="action" value="update_entry" />
-      <input type="hidden" name="id" value="${entry.id}" />
-      <input type="hidden" name="field" value="${field}" />
-      <input type="hidden" name="value" value="${editing.value}" />
-    `;
+    form.action = window.location.pathname + window.location.search;
+    
+    // Créer les inputs de manière sécurisée
+    const actionInput = document.createElement("input");
+    actionInput.type = "hidden";
+    actionInput.name = "action";
+    actionInput.value = "update_entry";
+    form.appendChild(actionInput);
+    
+    const idInput = document.createElement("input");
+    idInput.type = "hidden";
+    idInput.name = "id";
+    idInput.value = entry.id;
+    form.appendChild(idInput);
+    
+    const fieldInput = document.createElement("input");
+    fieldInput.type = "hidden";
+    fieldInput.name = "field";
+    fieldInput.value = field;
+    form.appendChild(fieldInput);
+    
+    const valueInput = document.createElement("input");
+    valueInput.type = "hidden";
+    valueInput.name = "value";
+    valueInput.value = editing.value;
+    form.appendChild(valueInput);
+    
     document.body.appendChild(form);
     form.submit();
   };
