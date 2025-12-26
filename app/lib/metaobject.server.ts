@@ -506,6 +506,7 @@ export async function getMetaobjectEntries(admin: AdminApiContext): Promise<{
             fields {
               key
               value
+              type
             }
           }
         }
@@ -523,7 +524,8 @@ export async function getMetaobjectEntries(admin: AdminApiContext): Promise<{
               id: string;
               fields?: Array<{
                 key: string;
-                value: string | number;
+                value: string | number | null;
+                type?: string;
               }>;
             };
           }>;
@@ -551,14 +553,53 @@ export async function getMetaobjectEntries(admin: AdminApiContext): Promise<{
         type?: string;
       } = { id: node.id };
 
+      // Debug: log les champs reçus
+      console.log("Champs reçus pour l'entrée:", node.id, node.fields);
+
+      // Debug: log tous les champs reçus
+      console.log("Champs GraphQL reçus pour l'entrée:", node.id);
+      console.log("Tous les champs:", JSON.stringify(node.fields, null, 2));
+
       node.fields?.forEach(field => {
-        if (field.key === "identification") entry.identification = String(field.value);
-        if (field.key === "name") entry.name = String(field.value);
-        if (field.key === "email") entry.email = String(field.value);
-        if (field.key === "code") entry.code = String(field.value);
-        if (field.key === "montant") entry.montant = Number(field.value);
-        if (field.key === "type") entry.type = String(field.value);
+        // Gérer les valeurs null/undefined
+        if (field.value === null || field.value === undefined || field.value === "") {
+          console.log(`Champ ${field.key} est vide ou null`);
+          return; // Ignorer les valeurs null/vides
+        }
+
+        const stringValue = String(field.value).trim();
+        if (!stringValue) {
+          return; // Ignorer les chaînes vides après trim
+        }
+
+        if (field.key === "identification") {
+          entry.identification = stringValue;
+          console.log(`Identification définie: ${stringValue}`);
+        } else if (field.key === "name") {
+          entry.name = stringValue;
+          console.log(`Name défini: ${stringValue}`);
+        } else if (field.key === "email") {
+          entry.email = stringValue;
+          console.log(`Email défini: ${stringValue}`);
+        } else if (field.key === "code") {
+          entry.code = stringValue;
+          console.log(`Code défini: ${stringValue}`);
+        } else if (field.key === "montant") {
+          const numValue = Number(field.value);
+          if (!isNaN(numValue)) {
+            entry.montant = numValue;
+            console.log(`Montant défini: ${numValue}`);
+          }
+        } else if (field.key === "type") {
+          entry.type = stringValue;
+          console.log(`Type défini: ${stringValue}`);
+        } else {
+          console.log(`Champ inconnu ignoré: ${field.key} = ${field.value}`);
+        }
       });
+
+      // Debug: log l'entrée finale
+      console.log("Entrée parsée:", entry);
 
       return entry;
     }).filter((entry): entry is NonNullable<typeof entry> => entry !== null);

@@ -163,42 +163,41 @@ function EntryRow({ entry, index }: {
   index: number;
 }) {
   const [isEditing, setIsEditing] = React.useState(false);
-  const [formData, setFormData] = React.useState({
-    identification: entry.identification || "",
-    name: entry.name || "",
-    email: entry.email || "",
-    code: entry.code || "",
-    montant: entry.montant !== undefined ? String(entry.montant) : "",
-    type: entry.type || "",
-  });
-
-  // Mettre à jour formData quand entry change
-  React.useEffect(() => {
-    setFormData({
+  
+  // Fonction pour initialiser les données du formulaire
+  const getInitialFormData = () => {
+    const data = {
       identification: entry.identification || "",
       name: entry.name || "",
       email: entry.email || "",
       code: entry.code || "",
-      montant: entry.montant !== undefined ? String(entry.montant) : "",
+      montant: entry.montant !== undefined && entry.montant !== null ? String(entry.montant) : "",
       type: entry.type || "",
-    });
-  }, [entry]);
+    };
+    // Debug: log les valeurs
+    console.log("Entry data:", entry);
+    console.log("Form data initialized:", data);
+    return data;
+  };
+
+  const [formData, setFormData] = React.useState(getInitialFormData());
+
+  // Mettre à jour formData quand entry change
+  React.useEffect(() => {
+    const newData = getInitialFormData();
+    setFormData(newData);
+  }, [entry.id, entry.identification, entry.name, entry.email, entry.code, entry.montant, entry.type]);
 
   const handleEdit = () => {
+    console.log("Mode édition activé pour:", entry);
+    console.log("Données du formulaire:", formData);
     setIsEditing(true);
   };
 
   const handleCancel = () => {
     setIsEditing(false);
-    // Réinitialiser les valeurs
-    setFormData({
-      identification: entry.identification || "",
-      name: entry.name || "",
-      email: entry.email || "",
-      code: entry.code || "",
-      montant: entry.montant !== undefined ? String(entry.montant) : "",
-      type: entry.type || "",
-    });
+    // Réinitialiser les valeurs avec les valeurs actuelles de l'entrée
+    setFormData(getInitialFormData());
   };
 
   return (
@@ -297,12 +296,48 @@ function EntryRow({ entry, index }: {
         </Form>
       ) : (
         <>
-          <td style={{ padding: "12px" }}>{entry.identification || "-"}</td>
-          <td style={{ padding: "12px" }}>{entry.name || "-"}</td>
-          <td style={{ padding: "12px" }}>{entry.email || "-"}</td>
-          <td style={{ padding: "12px" }}>{entry.code || "-"}</td>
-          <td style={{ padding: "12px" }}>{entry.montant !== undefined ? entry.montant : "-"}</td>
-          <td style={{ padding: "12px" }}>{entry.type || "-"}</td>
+          <td style={{ padding: "12px" }}>
+            {entry.identification ? (
+              <span>{entry.identification}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
+          <td style={{ padding: "12px" }}>
+            {entry.name ? (
+              <span>{entry.name}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
+          <td style={{ padding: "12px" }}>
+            {entry.email ? (
+              <span>{entry.email}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
+          <td style={{ padding: "12px" }}>
+            {entry.code ? (
+              <span>{entry.code}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
+          <td style={{ padding: "12px" }}>
+            {entry.montant !== undefined && entry.montant !== null ? (
+              <span>{entry.montant}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
+          <td style={{ padding: "12px" }}>
+            {entry.type ? (
+              <span>{entry.type}</span>
+            ) : (
+              <span style={{ color: "#999", fontStyle: "italic" }}>vide</span>
+            )}
+          </td>
           <td style={{ padding: "12px" }}>
             <div style={{ display: "flex", gap: "4px" }}>
               <button
