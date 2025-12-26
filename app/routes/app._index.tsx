@@ -79,43 +79,54 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { error: result.error || "Erreur lors de la création de l'entrée" };
   }
 
-  // Modifier une entrée
+  // Modifier une entrée (modification globale de tous les champs)
   if (actionType === "update_entry") {
     const id = formData.get("id") as string;
-    const field = formData.get("field") as string;
-    const value = (formData.get("value") as string)?.trim() || "";
+    const identification = (formData.get("identification") as string)?.trim() || "";
+    const name = (formData.get("name") as string)?.trim() || "";
+    const email = (formData.get("email") as string)?.trim() || "";
+    const code = (formData.get("code") as string)?.trim() || "";
+    const montantStr = (formData.get("montant") as string)?.trim() || "";
+    const type = (formData.get("type") as string)?.trim() || "";
 
-    // Validation : la valeur ne doit pas être vide
-    if (!value || value === "") {
-      return { error: `Le champ ${field} ne peut pas être vide` };
+    // Validation
+    if (!id) {
+      return { error: "ID de l'entrée manquant" };
+    }
+    if (!identification) {
+      return { error: "Le champ Identification est requis" };
+    }
+    if (!name) {
+      return { error: "Le champ Name est requis" };
+    }
+    if (!email) {
+      return { error: "Le champ Email est requis" };
+    }
+    if (!code) {
+      return { error: "Le champ Code est requis" };
+    }
+    if (!montantStr || isNaN(parseFloat(montantStr))) {
+      return { error: "Le champ Montant est requis et doit être un nombre valide" };
+    }
+    if (!type) {
+      return { error: "Le champ Type est requis" };
     }
     
     const updateFields: {
-      identification?: string;
-      name?: string;
-      email?: string;
-      code?: string;
-      montant?: number;
-      type?: string;
-    } = {};
-    
-    if (field === "montant") {
-      const numValue = parseFloat(value);
-      if (isNaN(numValue)) {
-        return { error: "Le montant doit être un nombre valide" };
-      }
-      updateFields.montant = numValue;
-    } else if (field === "identification") {
-      updateFields.identification = value;
-    } else if (field === "name") {
-      updateFields.name = value;
-    } else if (field === "email") {
-      updateFields.email = value;
-    } else if (field === "code") {
-      updateFields.code = value;
-    } else if (field === "type") {
-      updateFields.type = value;
-    }
+      identification: string;
+      name: string;
+      email: string;
+      code: string;
+      montant: number;
+      type: string;
+    } = {
+      identification,
+      name,
+      email,
+      code,
+      montant: parseFloat(montantStr),
+      type,
+    };
 
     const result = await updateMetaobjectEntry(admin, id, updateFields);
     if (result.success) {
@@ -151,49 +162,31 @@ function EntryRow({ entry, index }: {
   }; 
   index: number;
 }) {
-  const [editing, setEditing] = React.useState<{ field: string | null; value: string }>({ field: null, value: "" });
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    identification: entry.identification || "",
+    name: entry.name || "",
+    email: entry.email || "",
+    code: entry.code || "",
+    montant: entry.montant !== undefined ? String(entry.montant) : "",
+    type: entry.type || "",
+  });
 
-  const handleEdit = (field: string, currentValue: string | number | undefined) => {
-    setEditing({ field, value: String(currentValue || "") });
+  const handleEdit = () => {
+    setIsEditing(true);
   };
 
-  const handleSave = (field: string, e?: React.MouseEvent) => {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    // Créer un formulaire et le soumettre
-    const form = document.createElement("form");
-    form.method = "post";
-    form.action = window.location.pathname + window.location.search;
-    
-    // Créer les inputs de manière sécurisée
-    const actionInput = document.createElement("input");
-    actionInput.type = "hidden";
-    actionInput.name = "action";
-    actionInput.value = "update_entry";
-    form.appendChild(actionInput);
-    
-    const idInput = document.createElement("input");
-    idInput.type = "hidden";
-    idInput.name = "id";
-    idInput.value = entry.id;
-    form.appendChild(idInput);
-    
-    const fieldInput = document.createElement("input");
-    fieldInput.type = "hidden";
-    fieldInput.name = "field";
-    fieldInput.value = field;
-    form.appendChild(fieldInput);
-    
-    const valueInput = document.createElement("input");
-    valueInput.type = "hidden";
-    valueInput.name = "value";
-    valueInput.value = editing.value;
-    form.appendChild(valueInput);
-    
-    document.body.appendChild(form);
-    form.submit();
+  const handleCancel = () => {
+    setIsEditing(false);
+    // Réinitialiser les valeurs
+    setFormData({
+      identification: entry.identification || "",
+      name: entry.name || "",
+      email: entry.email || "",
+      code: entry.code || "",
+      montant: entry.montant !== undefined ? String(entry.montant) : "",
+      type: entry.type || "",
+    });
   };
 
   return (
@@ -204,279 +197,138 @@ function EntryRow({ entry, index }: {
       <td style={{ padding: "12px", color: "#666", fontSize: "0.9em" }}>
         {entry.id.split("/").pop()?.slice(-8)}
       </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "identification" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <input
-              type="text"
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            />
-            <button
-              type="button"
-              onClick={(e) => handleSave("identification", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.identification || "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("identification", entry.identification);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "name" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <input
-              type="text"
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            />
-            <button
-              type="button"
-              onClick={(e) => handleSave("name", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.name || "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("name", entry.name);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "email" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <input
-              type="email"
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            />
-            <button
-              type="button"
-              onClick={(e) => handleSave("email", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.email || "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("email", entry.email);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "code" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <input
-              type="text"
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            />
-            <button
-              type="button"
-              onClick={(e) => handleSave("code", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.code || "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("code", entry.code);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "montant" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <input
-              type="number"
-              step="0.01"
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            />
-            <button
-              type="button"
-              onClick={(e) => handleSave("montant", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.montant !== undefined ? entry.montant : "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("montant", entry.montant);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        {editing.field === "type" ? (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <select
-              value={editing.value}
-              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
-            >
-              <option value="%">%</option>
-              <option value="€">€</option>
-            </select>
-            <button
-              type="button"
-              onClick={(e) => handleSave("type", e)}
-              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✓
-            </button>
-            <button
-              onClick={() => setEditing({ field: null, value: "" })}
-              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-            <span>{entry.type || "-"}</span>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                handleEdit("type", entry.type);
-              }}
-              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
-              title="Modifier"
-            >
-              ✏️
-            </button>
-          </div>
-        )}
-      </td>
-      <td style={{ padding: "12px" }}>
-        <Form method="post">
-          <input type="hidden" name="action" value="delete_entry" />
-          <input type="hidden" name="id" value={entry.id} />
-          <button
-            type="submit"
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "1.2em",
-              padding: "4px 8px"
-            }}
-            title="Supprimer"
-            onClick={(e) => {
-              if (!confirm("Êtes-vous sûr de vouloir supprimer cette entrée ?")) {
-                e.preventDefault();
-              }
-            }}
-          >
-            🗑️
-          </button>
-        </Form>
-      </td>
+      {isEditing ? (
+        <>
+          <Form method="post">
+            <input type="hidden" name="action" value="update_entry" />
+            <input type="hidden" name="id" value={entry.id} />
+            <td style={{ padding: "12px" }}>
+              <input
+                type="text"
+                name="identification"
+                value={formData.identification}
+                onChange={(e) => setFormData({ ...formData, identification: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              />
+            </td>
+            <td style={{ padding: "12px" }}>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              />
+            </td>
+            <td style={{ padding: "12px" }}>
+              <input
+                type="email"
+                name="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              />
+            </td>
+            <td style={{ padding: "12px" }}>
+              <input
+                type="text"
+                name="code"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              />
+            </td>
+            <td style={{ padding: "12px" }}>
+              <input
+                type="number"
+                step="0.01"
+                name="montant"
+                value={formData.montant}
+                onChange={(e) => setFormData({ ...formData, montant: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              />
+            </td>
+            <td style={{ padding: "12px" }}>
+              <select
+                name="type"
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                required
+              >
+                <option value="">Type</option>
+                <option value="%">%</option>
+                <option value="€">€</option>
+              </select>
+            </td>
+            <td style={{ padding: "12px" }}>
+              <div style={{ display: "flex", gap: "4px" }}>
+                <button
+                  type="submit"
+                  style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                >
+                  ✓
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                >
+                  ✕
+                </button>
+              </div>
+            </td>
+          </Form>
+        </>
+      ) : (
+        <>
+          <td style={{ padding: "12px" }}>{entry.identification || "-"}</td>
+          <td style={{ padding: "12px" }}>{entry.name || "-"}</td>
+          <td style={{ padding: "12px" }}>{entry.email || "-"}</td>
+          <td style={{ padding: "12px" }}>{entry.code || "-"}</td>
+          <td style={{ padding: "12px" }}>{entry.montant !== undefined ? entry.montant : "-"}</td>
+          <td style={{ padding: "12px" }}>{entry.type || "-"}</td>
+          <td style={{ padding: "12px" }}>
+            <div style={{ display: "flex", gap: "4px" }}>
+              <button
+                type="button"
+                onClick={handleEdit}
+                style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.9em" }}
+                title="Modifier"
+              >
+                ✏️
+              </button>
+              <Form method="post">
+                <input type="hidden" name="action" value="delete_entry" />
+                <input type="hidden" name="id" value={entry.id} />
+                <button
+                  type="submit"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: "1.2em",
+                    padding: "4px 8px"
+                  }}
+                  title="Supprimer"
+                  onClick={(e) => {
+                    if (!confirm("Êtes-vous sûr de vouloir supprimer cette entrée ?")) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  🗑️
+                </button>
+              </Form>
+            </div>
+          </td>
+        </>
+      )}
     </tr>
   );
 }
