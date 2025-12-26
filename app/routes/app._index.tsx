@@ -1,7 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useActionData, Form, redirect } from "react-router";
+import React from "react";
 import { authenticate } from "../shopify.server";
-import { checkMetaobjectStatus, createMetaobject, getMetaobjectEntries } from "../lib/metaobject.server";
+import {
+  checkMetaobjectStatus,
+  createMetaobject,
+  getMetaobjectEntries,
+  createMetaobjectEntry,
+  updateMetaobjectEntry,
+  deleteMetaobjectEntry,
+} from "../lib/metaobject.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
@@ -27,17 +35,363 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const result = await createMetaobject(admin);
-  
-  if (result.success) {
-    // Attendre un peu pour que Shopify propage la création
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    // Recharger la page
-    return redirect("/app");
+  const formData = await request.formData();
+  const actionType = formData.get("action");
+
+  // Créer la structure du métaobjet si elle n'existe pas
+  if (actionType === "create_structure") {
+    const result = await createMetaobject(admin);
+    if (result.success) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      return redirect("/app");
+    }
+    return { error: result.error || "Erreur lors de la création" };
   }
-  
-  return { error: result.error || "Erreur lors de la création" };
+
+  // Créer une nouvelle entrée
+  if (actionType === "create_entry") {
+    const result = await createMetaobjectEntry(admin, {
+      identification: formData.get("identification") as string,
+      name: formData.get("name") as string,
+      email: formData.get("email") as string,
+      code: formData.get("code") as string,
+      montant: parseFloat(formData.get("montant") as string),
+      type: formData.get("type") as string,
+    });
+    if (result.success) {
+      return redirect("/app");
+    }
+    return { error: result.error || "Erreur lors de la création de l'entrée" };
+  }
+
+  // Modifier une entrée
+  if (actionType === "update_entry") {
+    const id = formData.get("id") as string;
+    const field = formData.get("field") as string;
+    const value = formData.get("value") as string;
+    
+    const updateFields: {
+      identification?: string;
+      name?: string;
+      email?: string;
+      code?: string;
+      montant?: number;
+      type?: string;
+    } = {};
+    
+    if (field === "montant") {
+      updateFields.montant = parseFloat(value);
+    } else if (field === "identification") {
+      updateFields.identification = value;
+    } else if (field === "name") {
+      updateFields.name = value;
+    } else if (field === "email") {
+      updateFields.email = value;
+    } else if (field === "code") {
+      updateFields.code = value;
+    } else if (field === "type") {
+      updateFields.type = value;
+    }
+
+    const result = await updateMetaobjectEntry(admin, id, updateFields);
+    if (result.success) {
+      return redirect("/app");
+    }
+    return { error: result.error || "Erreur lors de la modification" };
+  }
+
+  // Supprimer une entrée
+  if (actionType === "delete_entry") {
+    const id = formData.get("id") as string;
+    const result = await deleteMetaobjectEntry(admin, id);
+    if (result.success) {
+      return redirect("/app");
+    }
+    return { error: result.error || "Erreur lors de la suppression" };
+  }
+
+  return { error: "Action inconnue" };
 };
+
+function EntryRow({ entry, index }: { 
+  entry: {
+    id: string;
+    identification?: string;
+    name?: string;
+    email?: string;
+    code?: string;
+    montant?: number;
+    type?: string;
+  }; 
+  index: number;
+}) {
+  const [editing, setEditing] = React.useState<{ field: string | null; value: string }>({ field: null, value: "" });
+
+  const handleEdit = (field: string, currentValue: string | number | undefined) => {
+    setEditing({ field, value: String(currentValue || "") });
+  };
+
+  const handleSave = (field: string) => {
+    const form = document.createElement("form");
+    form.method = "post";
+    form.innerHTML = `
+      <input type="hidden" name="action" value="update_entry" />
+      <input type="hidden" name="id" value="${entry.id}" />
+      <input type="hidden" name="field" value="${field}" />
+      <input type="hidden" name="value" value="${editing.value}" />
+    `;
+    document.body.appendChild(form);
+    form.submit();
+  };
+
+  return (
+    <tr style={{
+      borderBottom: "1px solid #eee",
+      backgroundColor: index % 2 === 0 ? "white" : "#fafafa"
+    }}>
+      <td style={{ padding: "12px", color: "#666", fontSize: "0.9em" }}>
+        {entry.id.split("/").pop()?.slice(-8)}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "identification" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="text"
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            />
+            <button
+              onClick={() => handleSave("identification")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.identification || "-"}</span>
+            <button
+              onClick={() => handleEdit("identification", entry.identification)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "name" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="text"
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            />
+            <button
+              onClick={() => handleSave("name")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.name || "-"}</span>
+            <button
+              onClick={() => handleEdit("name", entry.name)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "email" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="email"
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            />
+            <button
+              onClick={() => handleSave("email")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.email || "-"}</span>
+            <button
+              onClick={() => handleEdit("email", entry.email)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "code" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="text"
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            />
+            <button
+              onClick={() => handleSave("code")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.code || "-"}</span>
+            <button
+              onClick={() => handleEdit("code", entry.code)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "montant" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="number"
+              step="0.01"
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            />
+            <button
+              onClick={() => handleSave("montant")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.montant !== undefined ? entry.montant : "-"}</span>
+            <button
+              onClick={() => handleEdit("montant", entry.montant)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        {editing.field === "type" ? (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <select
+              value={editing.value}
+              onChange={(e) => setEditing({ ...editing, value: e.target.value })}
+              style={{ flex: 1, padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+            >
+              <option value="%">%</option>
+              <option value="€">€</option>
+            </select>
+            <button
+              onClick={() => handleSave("type")}
+              style={{ padding: "4px 8px", backgroundColor: "#008060", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={() => setEditing({ field: null, value: "" })}
+              style={{ padding: "4px 8px", backgroundColor: "#ccc", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <span>{entry.type || "-"}</span>
+            <button
+              onClick={() => handleEdit("type", entry.type)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: "0.9em" }}
+              title="Modifier"
+            >
+              ✏️
+            </button>
+          </div>
+        )}
+      </td>
+      <td style={{ padding: "12px" }}>
+        <Form method="post">
+          <input type="hidden" name="action" value="delete_entry" />
+          <input type="hidden" name="id" value={entry.id} />
+          <button
+            type="submit"
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "1.2em",
+              padding: "4px 8px"
+            }}
+            title="Supprimer"
+            onClick={(e) => {
+              if (!confirm("Êtes-vous sûr de vouloir supprimer cette entrée ?")) {
+                e.preventDefault();
+              }
+            }}
+          >
+            🗑️
+          </button>
+        </Form>
+      </td>
+    </tr>
+  );
+}
 
 export default function Index() {
   const { status, entries } = useLoaderData<typeof loader>();
@@ -91,53 +445,118 @@ export default function Index() {
               Entrées du métaobjet ({entries.length})
             </h2>
             
-            {entries.length === 0 ? (
-              <p style={{ color: "#666", textAlign: "center", padding: "2rem" }}>
-                Aucune entrée pour le moment
-              </p>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table style={{
-                  width: "100%",
-                  borderCollapse: "collapse"
-                }}>
-                  <thead>
-                    <tr style={{ backgroundColor: "#f8f8f8" }}>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>ID</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Identification</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Code</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Montant</th>
-                      <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Type</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entries.map((entry, index) => (
-                      <tr key={entry.id} style={{
-                        borderBottom: "1px solid #eee",
-                        backgroundColor: index % 2 === 0 ? "white" : "#fafafa"
-                      }}>
-                        <td style={{ padding: "12px", color: "#666", fontSize: "0.9em" }}>
-                          {entry.id.split("/").pop()?.slice(-8)}
-                        </td>
-                        <td style={{ padding: "12px" }}>{entry.identification || "-"}</td>
-                        <td style={{ padding: "12px" }}>{entry.name || "-"}</td>
-                        <td style={{ padding: "12px" }}>{entry.email || "-"}</td>
-                        <td style={{ padding: "12px" }}>{entry.code || "-"}</td>
-                        <td style={{ padding: "12px" }}>{entry.montant !== undefined ? entry.montant : "-"}</td>
-                        <td style={{ padding: "12px" }}>{entry.type || "-"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{
+                width: "100%",
+                borderCollapse: "collapse"
+              }}>
+                <thead>
+                  <tr style={{ backgroundColor: "#f8f8f8" }}>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>ID</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Identification</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Name</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Email</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Code</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Montant</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Type</th>
+                    <th style={{ padding: "12px", textAlign: "left", borderBottom: "2px solid #ddd" }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Ligne pour ajouter une nouvelle entrée */}
+                  <tr style={{ backgroundColor: "#f0f8ff", borderBottom: "2px solid #ddd" }}>
+                    <td style={{ padding: "8px", color: "#666", fontSize: "0.9em" }}>Nouveau</td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="text"
+                        name="identification"
+                        placeholder="ID"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="text"
+                        name="name"
+                        placeholder="Name"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="email"
+                        name="email"
+                        placeholder="Email"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="text"
+                        name="code"
+                        placeholder="Code"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <input
+                        type="number"
+                        step="0.01"
+                        name="montant"
+                        placeholder="Montant"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      />
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <select
+                        name="type"
+                        style={{ width: "100%", padding: "4px", border: "1px solid #ddd", borderRadius: "4px" }}
+                        required
+                      >
+                        <option value="">Type</option>
+                        <option value="%">%</option>
+                        <option value="€">€</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: "8px" }}>
+                      <Form method="post">
+                        <input type="hidden" name="action" value="create_entry" />
+                        <button
+                          type="submit"
+                          style={{
+                            padding: "6px 12px",
+                            backgroundColor: "#008060",
+                            color: "white",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "0.9em"
+                          }}
+                        >
+                          ✓
+                        </button>
+                      </Form>
+                    </td>
+                  </tr>
+                  
+                  {/* Lignes existantes */}
+                  {entries.map((entry, index) => (
+                    <EntryRow key={entry.id} entry={entry} index={index} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       ) : (
         <div style={{ textAlign: "center" }}>
           <Form method="post">
+            <input type="hidden" name="action" value="create_structure" />
             <button
               type="submit"
               style={{

@@ -225,6 +225,215 @@ export async function checkMetaobjectStatus(admin: AdminApiContext): Promise<{
 }
 
 /**
+ * Crée une nouvelle entrée de métaobjet
+ */
+export async function createMetaobjectEntry(
+  admin: AdminApiContext,
+  fields: {
+    identification: string;
+    name: string;
+    email: string;
+    code: string;
+    montant: number;
+    type: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const mutation = `
+    mutation metaobjectCreate($metaobject: MetaobjectCreateInput!) {
+      metaobjectCreate(metaobject: $metaobject) {
+        metaobject {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const variables = {
+    metaobject: {
+      type: METAOBJECT_TYPE,
+      fields: [
+        { key: "identification", value: fields.identification },
+        { key: "name", value: fields.name },
+        { key: "email", value: fields.email },
+        { key: "code", value: fields.code },
+        { key: "montant", value: String(fields.montant) },
+        { key: "type", value: fields.type },
+      ],
+    },
+  };
+
+  try {
+    const response = await admin.graphql(mutation, { variables });
+    const data = await response.json() as {
+      errors?: Array<{ message: string }>;
+      data?: {
+        metaobjectCreate?: {
+          metaobject?: { id: string };
+          userErrors?: Array<{ field: string[]; message: string }>;
+        };
+      };
+    };
+
+    if (data.errors) {
+      return { success: false, error: JSON.stringify(data.errors) };
+    }
+
+    if (data.data?.metaobjectCreate?.userErrors?.length > 0) {
+      const errors = data.data.metaobjectCreate.userErrors;
+      return {
+        success: false,
+        error: errors.map((e: { message: string }) => e.message).join(", "),
+      };
+    }
+
+    return { success: !!data.data?.metaobjectCreate?.metaobject };
+  } catch (error) {
+    console.error("Erreur lors de la création de l'entrée:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erreur inconnue",
+    };
+  }
+}
+
+/**
+ * Met à jour une entrée de métaobjet
+ */
+export async function updateMetaobjectEntry(
+  admin: AdminApiContext,
+  id: string,
+  fields: {
+    identification?: string;
+    name?: string;
+    email?: string;
+    code?: string;
+    montant?: number;
+    type?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const mutation = `
+    mutation metaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+      metaobjectUpdate(id: $id, metaobject: $metaobject) {
+        metaobject {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const fieldsArray: Array<{ key: string; value: string }> = [];
+  if (fields.identification !== undefined) fieldsArray.push({ key: "identification", value: fields.identification });
+  if (fields.name !== undefined) fieldsArray.push({ key: "name", value: fields.name });
+  if (fields.email !== undefined) fieldsArray.push({ key: "email", value: fields.email });
+  if (fields.code !== undefined) fieldsArray.push({ key: "code", value: fields.code });
+  if (fields.montant !== undefined) fieldsArray.push({ key: "montant", value: String(fields.montant) });
+  if (fields.type !== undefined) fieldsArray.push({ key: "type", value: fields.type });
+
+  const variables = {
+    id,
+    metaobject: {
+      fields: fieldsArray,
+    },
+  };
+
+  try {
+    const response = await admin.graphql(mutation, { variables });
+    const data = await response.json() as {
+      errors?: Array<{ message: string }>;
+      data?: {
+        metaobjectUpdate?: {
+          metaobject?: { id: string };
+          userErrors?: Array<{ field: string[]; message: string }>;
+        };
+      };
+    };
+
+    if (data.errors) {
+      return { success: false, error: JSON.stringify(data.errors) };
+    }
+
+    if (data.data?.metaobjectUpdate?.userErrors?.length > 0) {
+      const errors = data.data.metaobjectUpdate.userErrors;
+      return {
+        success: false,
+        error: errors.map((e: { message: string }) => e.message).join(", "),
+      };
+    }
+
+    return { success: !!data.data?.metaobjectUpdate?.metaobject };
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour de l'entrée:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erreur inconnue",
+    };
+  }
+}
+
+/**
+ * Supprime une entrée de métaobjet
+ */
+export async function deleteMetaobjectEntry(
+  admin: AdminApiContext,
+  id: string
+): Promise<{ success: boolean; error?: string }> {
+  const mutation = `
+    mutation metaobjectDelete($id: ID!) {
+      metaobjectDelete(id: $id) {
+        deletedId
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  const variables = { id };
+
+  try {
+    const response = await admin.graphql(mutation, { variables });
+    const data = await response.json() as {
+      errors?: Array<{ message: string }>;
+      data?: {
+        metaobjectDelete?: {
+          deletedId?: string;
+          userErrors?: Array<{ field: string[]; message: string }>;
+        };
+      };
+    };
+
+    if (data.errors) {
+      return { success: false, error: JSON.stringify(data.errors) };
+    }
+
+    if (data.data?.metaobjectDelete?.userErrors?.length > 0) {
+      const errors = data.data.metaobjectDelete.userErrors;
+      return {
+        success: false,
+        error: errors.map((e: { message: string }) => e.message).join(", "),
+      };
+    }
+
+    return { success: !!data.data?.metaobjectDelete?.deletedId };
+  } catch (error) {
+    console.error("Erreur lors de la suppression de l'entrée:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erreur inconnue",
+    };
+  }
+}
+
+/**
  * Récupère toutes les entrées du métaobjet
  */
 export async function getMetaobjectEntries(admin: AdminApiContext): Promise<{
