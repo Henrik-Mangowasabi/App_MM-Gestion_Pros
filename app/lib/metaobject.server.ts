@@ -224,3 +224,94 @@ export async function checkMetaobjectStatus(admin: AdminApiContext): Promise<{
   }
 }
 
+/**
+ * Récupère toutes les entrées du métaobjet
+ */
+export async function getMetaobjectEntries(admin: AdminApiContext): Promise<{
+  entries: Array<{
+    id: string;
+    identification?: string;
+    name?: string;
+    email?: string;
+    code?: string;
+    montant?: number;
+    type?: string;
+  }>;
+  error?: string;
+}> {
+  const query = `
+    query {
+      metaobjects(first: 250, type: "${METAOBJECT_TYPE}") {
+        edges {
+          node {
+            id
+            fields {
+              key
+              value
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const response = await admin.graphql(query);
+    const data = await response.json() as {
+      data?: {
+        metaobjects?: {
+          edges?: Array<{
+            node?: {
+              id: string;
+              fields?: Array<{
+                key: string;
+                value: string | number;
+              }>;
+            };
+          }>;
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+
+    if (data.errors) {
+      return { entries: [], error: data.errors.map(e => e.message).join(", ") };
+    }
+
+    const edges = data.data?.metaobjects?.edges || [];
+    const entries = edges.map(edge => {
+      const node = edge.node;
+      if (!node) return null;
+
+      const entry: {
+        id: string;
+        identification?: string;
+        name?: string;
+        email?: string;
+        code?: string;
+        montant?: number;
+        type?: string;
+      } = { id: node.id };
+
+      node.fields?.forEach(field => {
+        if (field.key === "identification") entry.identification = String(field.value);
+        if (field.key === "name") entry.name = String(field.value);
+        if (field.key === "email") entry.email = String(field.value);
+        if (field.key === "code") entry.code = String(field.value);
+        if (field.key === "montant") entry.montant = Number(field.value);
+        if (field.key === "type") entry.type = String(field.value);
+      });
+
+      return entry;
+    }).filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    return { entries };
+  } catch (error) {
+    console.error("Erreur lors de la récupération des entrées:", error);
+    return {
+      entries: [],
+      error: error instanceof Error ? error.message : "Erreur inconnue"
+    };
+  }
+}
+
