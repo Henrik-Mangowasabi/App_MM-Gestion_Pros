@@ -9,16 +9,17 @@ export async function createShopifyDiscount(
     code: string;
     montant: number;
     type: string;
-    name: string; // Nom interne (ex: Code promo Pro Sante - [Code])
+    name: string;
   }
 ): Promise<{ success: boolean; discountId?: string; error?: string }> {
   
   const isPercentage = data.type === "%";
   
+  // CORRECTION ICI : on utilise codeDiscountNode au lieu de discountCodeNode
   const mutation = `
     mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
       discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
-        discountCodeNode {
+        codeDiscountNode {
           id
         }
         userErrors {
@@ -33,19 +34,15 @@ export async function createShopifyDiscount(
     basicCodeDiscount: {
       title: data.name,
       code: data.code,
-      startsAt: new Date().toISOString(), // Effectif de suite
-      usageLimit: null, // Illimité
+      startsAt: new Date().toISOString(),
+      usageLimit: null,
       appliesOncePerCustomer: false,
-      customerSelection: {
-        all: true // Pour tout le monde (ou tu peux restreindre)
-      },
+      customerSelection: { all: true },
       customerGets: {
         value: isPercentage 
-          ? { percentage: data.montant / 100 } // Shopify attend 0.2 pour 20%
+          ? { percentage: data.montant / 100 } 
           : { discountAmount: { amount: data.montant, appliesOnEachItem: false } },
-        items: {
-          all: true // S'applique à toute la commande
-        }
+        items: { all: true }
       }
     }
   };
@@ -59,7 +56,8 @@ export async function createShopifyDiscount(
       return { success: false, error: result.data.discountCodeBasicCreate.userErrors[0].message };
     }
 
-    return { success: true, discountId: result.data?.discountCodeBasicCreate?.discountCodeNode?.id };
+    // CORRECTION ICI AUSSI pour la lecture de la réponse
+    return { success: true, discountId: result.data?.discountCodeBasicCreate?.codeDiscountNode?.id };
   } catch (error) {
     return { success: false, error: String(error) };
   }
@@ -81,10 +79,11 @@ export async function updateShopifyDiscount(
   
   const isPercentage = data.type === "%";
 
+  // CORRECTION ICI : on utilise codeDiscountNode
   const mutation = `
     mutation discountCodeBasicUpdate($id: ID!, $basicCodeDiscount: DiscountCodeBasicInput!) {
       discountCodeBasicUpdate(id: $id, basicCodeDiscount: $basicCodeDiscount) {
-        discountCodeNode {
+        codeDiscountNode {
           id
         }
         userErrors {
