@@ -196,23 +196,44 @@ export async function updateMetaobjectEntry(admin: AdminApiContext, id: string, 
   } catch (error) { return { success: false, error: String(error) }; }
 }
 
-// --- DELETE ENTRY ---
+// --- DELETE ENTRY (Optimisé avec Logs) ---
 export async function deleteMetaobjectEntry(admin: AdminApiContext, id: string) {
+  console.log(`[DELETE] Tentative de suppression pour l'entrée : ${id}`);
+
+  // 1. Récupérer le discount_id avant suppression
   const currentEntryQuery = `query($id: ID!) { metaobject(id: $id) { field(key: "discount_id") { value } } }`;
   let existingDiscountId = null;
+  
   try {
     const r = await admin.graphql(currentEntryQuery, { variables: { id } });
     const d = await r.json() as any;
     existingDiscountId = d.data?.metaobject?.field?.value;
-  } catch (e) {}
-
-  if (existingDiscountId) {
-    await deleteShopifyDiscount(admin, existingDiscountId);
+    console.log(`[DELETE] ID Discount trouvé : ${existingDiscountId}`);
+  } catch (e) {
+    console.error("[DELETE] Erreur lors de la récupération du discount_id:", e);
   }
 
+  // 2. Supprimer la promo Shopify SI un ID existe
+  if (existingDiscountId) {
+    console.log(`[DELETE] Suppression du code promo Shopify ID: ${existingDiscountId}...`);
+    const deleteResult = await deleteShopifyDiscount(admin, existingDiscountId);
+    if (deleteResult.success) {
+      console.log("[DELETE] Code promo supprimé avec succès.");
+    } else {
+      console.error("[DELETE] Échec suppression code promo:", deleteResult.error);
+    }
+  } else {
+    console.log("[DELETE] Aucun code promo lié à supprimer (ou ID manquant).");
+  }
+
+  // 3. Supprimer le métaobjet
   const mutation = `mutation metaobjectDelete($id: ID!) { metaobjectDelete(id: $id) { deletedId, userErrors { field message } } }`;
   try {
     const response = await admin.graphql(mutation, { variables: { id } });
+    console.log(`[DELETE] Entrée métaobjet supprimée.`);
     return { success: true };
-  } catch (error) { return { success: false, error: String(error) }; }
+  } catch (error) { 
+    console.error("[DELETE] Erreur fatale:", error);
+    return { success: false, error: String(error) }; 
+  }
 }
