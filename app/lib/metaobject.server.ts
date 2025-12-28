@@ -142,31 +142,69 @@ export async function createMetaobjectEntry(admin: AdminApiContext, fields: any)
 
 // --- UPDATE ENTRY ---
 export async function updateMetaobjectEntry(admin: AdminApiContext, id: string, fields: any) {
-  // Récupérer l'ID discount existant
+  // 1. CORRECTION : On initialise le tableau AVANT de l'utiliser
+  const fieldsInput: any[] = [];
+  
+  if (fields.identification) fieldsInput.push({ key: "identification", value: String(fields.identification) });
+  if (fields.name) fieldsInput.push({ key: "name", value: String(fields.name) });
+  if (fields.email) fieldsInput.push({ key: "email", value: String(fields.email) });
+  if (fields.code) fieldsInput.push({ key: "code", value: String(fields.code) });
+  if (fields.montant) fieldsInput.push({ key: "montant", value: String(fields.montant) });
+  if (fields.type) fieldsInput.push({ key: "type", value: String(fields.type) });
+  // Note : On ne pousse pas "status" ici tout de suite, on gère la logique ci-dessous
+
+  // 2. Récupérer l'ID discount existant pour faire la synchro avec Shopify
   const currentEntryQuery = `query($id: ID!) { metaobject(id: $id) { field(key: "discount_id") { value } } }`;
   let existingDiscountId = null;
+  
   try {
     const r = await admin.graphql(currentEntryQuery, { variables: { id } });
     const d = await r.json() as any;
     existingDiscountId = d.data?.metaobject?.field?.value;
-  } catch (e) {}
+  } catch (e) {
+    console.error("Erreur récupération discount_id:", e);
+  }
 
+  // 3. Logique de mise à jour Shopify (Discount)
   if (existingDiscountId) {
-    // Si c'est juste un toggle de status
-    if (fields.status !== undefined) fieldsInput.push({ key: "status", value: String(fields.status) })
-       await toggleShopifyDiscount(admin, existingDiscountId, fields.status);
-    } else {
-       // Sinon mise à jour complète
-       const discountName = `Code promo Pro Sante - ${fields.name}`;
-       await updateShopifyDiscount(admin, existingDiscountId, {
-         code: fields.code,
-         montant: fields.montant,
-         type: fields.type,
-         name: discountName
-       });
+    
+    // CAS A : C'est un changement de statut (Actif / Inactif)
+    if (fields.status !== undefined) {
+       console.log(`[UPDATE] Toggle status vers : ${fields.status}`);
+       
+       // a. On ajoute le champ au metaobject
+       fieldsInput.push({ key: "status", value: String(fields.status) });
+       
+       // b. On appelle Shopify pour couper/activer le code promo
+       const toggleResult = await toggleShopifyDiscount(admin, existingDiscountId, fields.status);
+       
+       if (!toggleResult.success) {
+         console.error("[ERREUR SHOPIFY] Impossible de changer le statut du code promo :", toggleResult.error);
+         // Optionnel : tu pourrais renvoyer une erreur ici pour annuler tout
+       }
+    } 
+    // CAS B : C'est une mise à jour des infos (Nom, Code, Montant)
+    else {
+       const discountName = `Code promo Pro Sante - ${fields.name || "Updated"}`;
+       // On ne fait l'update que si on a les infos nécessaires
+       if (fields.code && fields.montant) {
+           await updateShopifyDiscount(admin, existingDiscountId, {
+             code: fields.code,
+             montant: fields.montant,
+             type: fields.type,
+             name: discountName
+           });
+       }
+    }
+  } else {
+    console.warn("[ATTENTION] Aucun discount_id trouvé pour ce pro, le code promo Shopify ne sera pas mis à jour.");
+    // Si on change le status mais qu'il n'y a pas de discount ID, on sauvegarde quand même le status dans le métaobjet
+    if (fields.status !== undefined) {
+        fieldsInput.push({ key: "status", value: String(fields.status) });
     }
   }
 
+  // 4. Mise à jour du Métaobjet (Base de données locale de l'app)
   const mutation = `
     mutation metaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
       metaobjectUpdate(id: $id, metaobject: $metaobject) {
@@ -176,24 +214,19 @@ export async function updateMetaobjectEntry(admin: AdminApiContext, id: string, 
     }
   `;
 
-  // Construction dynamique des champs à mettre à jour
-  const fieldsInput = [];
-  if (fields.identification) fieldsInput.push({ key: "identification", value: String(fields.identification) });
-  if (fields.name) fieldsInput.push({ key: "name", value: String(fields.name) });
-  if (fields.email) fieldsInput.push({ key: "email", value: String(fields.email) });
-  if (fields.code) fieldsInput.push({ key: "code", value: String(fields.code) });
-  if (fields.montant) fieldsInput.push({ key: "montant", value: String(fields.montant) });
-  if (fields.type) fieldsInput.push({ key: "type", value: String(fields.type) });
-  if (fields.status !== undefined) fieldsInput.push({ key: "status", value: String(fields.status) });
-
   try {
     const response = await admin.graphql(mutation, { variables: { id, metaobject: { fields: fieldsInput } } });
     const data = await response.json() as any;
+    
     if (data.data?.metaobjectUpdate?.userErrors?.length > 0) {
+      console.error("[ERREUR METAOBJECT]", data.data.metaobjectUpdate.userErrors);
       return { success: false, error: data.data.metaobjectUpdate.userErrors[0].message };
     }
+    
     return { success: true };
-  } catch (error) { return { success: false, error: String(error) }; }
+  } catch (error) { 
+    return { success: false, error: String(error) }; 
+  }
 }
 
 // --- DELETE ENTRY (Optimisé avec Logs) ---
