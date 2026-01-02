@@ -1,23 +1,53 @@
 // FICHIER : app/routes/app.clients.tsx
 import { useLoaderData, Link } from "react-router";
 import { authenticate } from "../shopify.server";
-import { getProSanteCustomers } from "../lib/customer.server";
 import { getMetaobjectEntries } from "../lib/metaobject.server";
 
 export const loader = async ({ request }: any) => {
   const { admin } = await authenticate.admin(request);
   
-  // On récupère les deux listes en parallèle
-  const [customers, metaEntriesResult] = await Promise.all([
-    getProSanteCustomers(admin),
-    getMetaobjectEntries(admin)
-  ]);
-
+  // 1. On récupère les entrées de ton Métaobjet (tes Pros)
+  const metaEntriesResult = await getMetaobjectEntries(admin);
   const metaEntries = metaEntriesResult.entries || [];
 
-  // On fait le lien entre les deux via l'Email ou l'ID
-  const combinedData = customers.map((customer: any) => {
-    // CORRECTION : On cherche d'abord par ID (plus fiable), sinon par Email
+  console.log("🚨 1. Entrées Métaobjets trouvées :", metaEntries.length);
+
+  // 2. On récupère les 50 derniers clients (SANS FILTRE pour être sûr de tout avoir)
+  // On filtrera nous-même après, c'est plus fiable que le moteur de recherche Shopify
+  const response = await admin.graphql(
+    `#graphql
+    query {
+      customers(first: 50, reverse: true) {
+        edges {
+          node {
+            id
+            firstName
+            lastName
+            email
+            tags
+            amountSpent { amount currencyCode }
+            ordersCount
+            state
+          }
+        }
+      }
+    }`
+  );
+
+  const responseJson = await response.json();
+  const allCustomers = responseJson.data.customers.edges.map((edge: any) => edge.node);
+
+  console.log("🚨 2. Total clients récupérés (brut) :", allCustomers.length);
+
+  // 3. On filtre NOUS-MÊME en Javascript (plus fiable que l'API de recherche)
+  const proSanteCustomers = allCustomers.filter((c: any) => 
+    c.tags && c.tags.includes('pro_sante')
+  );
+
+  console.log("🚨 3. Clients après filtre 'pro_sante' :", proSanteCustomers.length);
+
+  // 4. On fait le lien entre les deux
+  const combinedData = proSanteCustomers.map((customer: any) => {
     const linkedEntry = metaEntries.find((e: any) => 
       e.customer_id === customer.id || 
       e.email?.toLowerCase() === customer.email?.toLowerCase()
@@ -25,7 +55,6 @@ export const loader = async ({ request }: any) => {
     
     return {
       ...customer,
-      // Si on a trouvé une entrée liée, on récupère ses infos
       linkedCode: linkedEntry ? linkedEntry.code : "⚠️ Pas de lien",
       linkedAmount: linkedEntry ? linkedEntry.montant : "-",
       linkedStatus: linkedEntry ? (linkedEntry.status ? "Actif" : "Inactif") : "-",
@@ -53,11 +82,7 @@ export default function ClientsPage() {
               <tr style={{ backgroundColor: "#fafafa", borderBottom: "1px solid #e1e3e5" }}>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Nom du Client</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Email</th>
-                
-                {/* 👇 AJOUT COLONNE TAGS 👇 */}
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Tags</th>
-                {/* 👆 ------------------- 👆 */}
-
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Code Promo Lié</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Réduction</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Statut Promo</th>
@@ -73,11 +98,10 @@ export default function ClientsPage() {
                     <td style={{ padding: "16px", fontWeight: "500" }}>{client.firstName} {client.lastName}</td>
                     <td style={{ padding: "16px", color: "#555" }}>{client.email}</td>
                     
-                    {/* 👇 AJOUT AFFICHAGE TAGS 👇 */}
                     <td style={{ padding: "16px" }}>
                         {client.tags && client.tags.map((tag: string) => (
                              <span key={tag} style={{ 
-                                backgroundColor: "#e4e5e7", 
+                                backgroundColor: tag === 'pro_sante' ? "#c4eec4" : "#e4e5e7", 
                                 color: "#333",
                                 padding: "2px 6px", 
                                 borderRadius: "4px", 
@@ -90,9 +114,7 @@ export default function ClientsPage() {
                               </span>
                         ))}
                     </td>
-                    {/* 👆 --------------------- 👆 */}
 
-                    {/* Colonne Code Promo (Lien intelligent) */}
                     <td style={{ padding: "16px" }}>
                        {client.linkedCode !== "⚠️ Pas de lien" ? (
                          <span style={{ backgroundColor: "#e3f1df", color: "#008060", padding: "4px 8px", borderRadius: "4px", fontFamily: "monospace", fontWeight: "bold" }}>
@@ -111,7 +133,7 @@ export default function ClientsPage() {
                     </td>
 
                     <td style={{ padding: "16px", textAlign: "right", fontWeight: "bold" }}>
-                      {client.totalSpent} {client.currencyCode || "EUR"} <br/>
+                      {client.amountSpent?.amount} {client.amountSpent?.currencyCode} <br/>
                       <span style={{ fontSize: "0.75rem", fontWeight: "normal", color: "#888" }}>({client.ordersCount} commandes)</span>
                     </td>
                   </tr>
@@ -120,11 +142,6 @@ export default function ClientsPage() {
             </tbody>
           </table>
         </div>
-
-        <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#e8f4fd", borderRadius: "6px", color: "#0d3d66", fontSize: "0.9rem" }}>
-          ℹ️ <b>Info :</b> Cette page affiche les clients Shopify ayant le tag <code>pro_sante</code>. Les informations de code promo sont récupérées dynamiquement.
-        </div>
-
       </div>
     </div>
   );
