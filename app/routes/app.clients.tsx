@@ -4,66 +4,73 @@ import { authenticate } from "../shopify.server";
 import { getMetaobjectEntries } from "../lib/metaobject.server";
 
 export const loader = async ({ request }: any) => {
+  // Cette ligne va vérifier si les scopes sont à jour. 
+  // Si non, elle va rediriger vers l'auth (ce qui évite l'erreur 500)
   const { admin } = await authenticate.admin(request);
 
-  // 1. On récupère les entrées de ton Métaobjet (tes Pros)
+  // 1. On récupère les entrées de ton Métaobjet
   const metaEntriesResult = await getMetaobjectEntries(admin);
   const metaEntries = metaEntriesResult.entries || [];
 
-  // 2. RÉCUPÉRATION DE TOUS LES CLIENTS (BOUCLE DE PAGINATION)
+  // 2. RÉCUPÉRATION DE TOUS LES CLIENTS
   let allCustomers: any[] = [];
   let hasNextPage = true;
   let cursor = null;
 
-  while (hasNextPage) {
-    const response = await admin.graphql(
-      `#graphql
-      query getAllCustomers($cursor: String) {
-        customers(first: 250, after: $cursor) {
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-          edges {
-            node {
-              id
-              firstName
-              lastName
-              email
-              tags
-              amountSpent { amount currencyCode }
-              ordersCount
-              state
+  try {
+    while (hasNextPage) {
+      const response = await admin.graphql(
+        `#graphql
+        query getAllCustomers($cursor: String) {
+          customers(first: 250, after: $cursor) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            edges {
+              node {
+                id
+                firstName
+                lastName
+                email
+                tags
+                amountSpent { amount currencyCode }
+                ordersCount
+                state
+              }
             }
           }
-        }
-      }`,
-      { variables: { cursor } }
-    );
+        }`,
+        { variables: { cursor } }
+      );
 
-    const data = await response.json();
-    const { edges, pageInfo } = data.data.customers;
+      const data = await response.json();
 
-    // On ajoute les clients de cette page à notre liste globale
-    const nodes = edges.map((edge: any) => edge.node);
-    allCustomers = allCustomers.concat(nodes);
+      // Si erreur de permissions, on log mais on ne crash pas tout
+      if (data.errors) {
+        console.error("🚨 ERREUR GRAPHQL :", JSON.stringify(data.errors, null, 2));
+        // On break pour éviter une boucle infinie d'erreurs
+        break; 
+      }
 
-    // On prépare la page suivante
-    cursor = pageInfo.endCursor;
-    hasNextPage = pageInfo.hasNextPage;
+      const { edges, pageInfo } = data.data.customers;
+      const nodes = edges.map((edge: any) => edge.node);
+      allCustomers = allCustomers.concat(nodes);
+
+      cursor = pageInfo.endCursor;
+      hasNextPage = pageInfo.hasNextPage;
+    }
+  } catch (error) {
+    console.error("🚨 CRASH LOADER :", error);
+    // On continue même si ça plante, pour afficher au moins la page vide
   }
 
-  console.log("🚨 TOTAL CLIENTS RÉCUPÉRÉS :", allCustomers.length);
-
-  // 3. FILTRE JAVASCRIPT (Fiable à 100%)
-  // On ne garde que ceux qui ont le tag 'pro_sante'
+  // 3. FILTRE JAVASCRIPT
   const proSanteCustomers = allCustomers.filter((c: any) => 
     c.tags && c.tags.includes('pro_sante')
   );
 
-  console.log("🚨 CLIENTS AVEC TAG 'pro_sante' :", proSanteCustomers.length);
-
-  // 4. On fait le lien avec les données des Pros
+  // 4. LIAISON DES DONNÉES
   const combinedData = proSanteCustomers.map((customer: any) => {
     const linkedEntry = metaEntries.find((e: any) => 
       e.customer_id === customer.id || 
