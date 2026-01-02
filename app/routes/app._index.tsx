@@ -18,6 +18,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
   const status = await checkMetaobjectStatus(admin);
   
+  // 1. On définit le type (j'ai ajouté tags?: string[])
   let entries: Array<{
     id: string;
     identification?: string;
@@ -26,11 +27,47 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     code?: string;
     montant?: number;
     type?: string;
+    customer_id?: string; // Ajouté car visible dans tes logs
+    tags?: string[];      // <--- LE CHAMP MANQUANT
   }> = [];
   
   if (status.exists) {
+    // 2. On récupère les entrées brutes
     const entriesResult = await getMetaobjectEntries(admin);
-    entries = entriesResult.entries;
+    const rawEntries = entriesResult.entries;
+
+    // 3. MAGIE : On va chercher les tags pour chaque entrée qui a un customer_id
+    entries = await Promise.all(rawEntries.map(async (entry: any) => {
+        // Si pas de client lié, on renvoie l'entrée telle quelle avec tags vide
+        if (!entry.customer_id) {
+            return { ...entry, tags: [] };
+        }
+
+        // Sinon, on demande à Shopify les tags de ce client spécifique
+        try {
+            const response = await admin.graphql(
+                `#graphql
+                query getCustomerTags($id: ID!) {
+                    customer(id: $id) {
+                        tags
+                    }
+                }`,
+                { variables: { id: entry.customer_id } }
+            );
+
+            const { data } = await response.json();
+            
+            // On retourne l'entrée fusionnée avec les tags trouvés
+            return { 
+                ...entry, 
+                tags: data?.customer?.tags || [] 
+            };
+
+        } catch (error) {
+            console.error("Erreur récup tags pour", entry.name, error);
+            return { ...entry, tags: [] };
+        }
+    }));
   }
   
   return { status, entries };
@@ -285,7 +322,7 @@ export default function Index() {
   const successType = searchParams.get("success");
 
   console.log("🚨 CONTENU EXACT DE ENTRIES :", entries);
-  
+
   // LOGIQUE DES MESSAGES
   let successMessage = "";
   if (successType === "entry_created") successMessage = "Entrée créée avec succès";
