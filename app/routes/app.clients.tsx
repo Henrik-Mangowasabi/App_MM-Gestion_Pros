@@ -15,7 +15,7 @@ export const loader = async ({ request }: any) => {
 
   const metaEntries = metaEntriesResult.entries || [];
 
-  // On fait le lien entre les deux via l'Email
+  // On fait le lien entre les deux via l'Email ou l'ID
   const combinedData = customers.map((customer: any) => {
     // CORRECTION : On cherche d'abord par ID (plus fiable), sinon par Email
     const linkedEntry = metaEntries.find((e: any) => 
@@ -25,9 +25,10 @@ export const loader = async ({ request }: any) => {
     
     return {
       ...customer,
-      // Si on a trouvé une entrée liée
+      // Si on a trouvé une entrée liée, on récupère ses infos
       linkedCode: linkedEntry ? linkedEntry.code : "⚠️ Pas de lien",
-      // ... (reste du return inchangé)
+      linkedAmount: linkedEntry ? linkedEntry.montant : "-",
+      linkedStatus: linkedEntry ? (linkedEntry.status ? "Actif" : "Inactif") : "-",
     };
   });
 
@@ -52,6 +53,11 @@ export default function ClientsPage() {
               <tr style={{ backgroundColor: "#fafafa", borderBottom: "1px solid #e1e3e5" }}>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Nom du Client</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Email</th>
+                
+                {/* 👇 AJOUT COLONNE TAGS 👇 */}
+                <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Tags</th>
+                {/* 👆 ------------------- 👆 */}
+
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Code Promo Lié</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Réduction</th>
                 <th style={{ padding: "16px", textAlign: "left", fontSize: "0.9rem", color: "#444" }}>Statut Promo</th>
@@ -60,13 +66,32 @@ export default function ClientsPage() {
             </thead>
             <tbody>
               {clients.length === 0 ? (
-                <tr><td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "#888" }}>Aucun client avec le tag 'pro_sante' trouvé.</td></tr>
+                <tr><td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "#888" }}>Aucun client avec le tag 'pro_sante' trouvé.</td></tr>
               ) : (
                 clients.map((client: any, i: number) => (
                   <tr key={client.id} style={{ borderBottom: "1px solid #eee", backgroundColor: i % 2 === 0 ? "white" : "#fcfcfc" }}>
                     <td style={{ padding: "16px", fontWeight: "500" }}>{client.firstName} {client.lastName}</td>
                     <td style={{ padding: "16px", color: "#555" }}>{client.email}</td>
                     
+                    {/* 👇 AJOUT AFFICHAGE TAGS 👇 */}
+                    <td style={{ padding: "16px" }}>
+                        {client.tags && client.tags.map((tag: string) => (
+                             <span key={tag} style={{ 
+                                backgroundColor: "#e4e5e7", 
+                                color: "#333",
+                                padding: "2px 6px", 
+                                borderRadius: "4px", 
+                                fontSize: "0.75rem", 
+                                marginRight: "4px",
+                                display: "inline-block",
+                                border: "1px solid #ddd"
+                              }}>
+                                {tag}
+                              </span>
+                        ))}
+                    </td>
+                    {/* 👆 --------------------- 👆 */}
+
                     {/* Colonne Code Promo (Lien intelligent) */}
                     <td style={{ padding: "16px" }}>
                        {client.linkedCode !== "⚠️ Pas de lien" ? (
@@ -97,7 +122,7 @@ export default function ClientsPage() {
         </div>
 
         <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#e8f4fd", borderRadius: "6px", color: "#0d3d66", fontSize: "0.9rem" }}>
-          ℹ️ <b>Info :</b> Cette page affiche les clients Shopify ayant le tag <code>pro_sante</code>. Les informations de code promo sont récupérées dynamiquement en faisant correspondre l'email du client avec l'email dans votre liste de Pros.
+          ℹ️ <b>Info :</b> Cette page affiche les clients Shopify ayant le tag <code>pro_sante</code>. Les informations de code promo sont récupérées dynamiquement.
         </div>
 
       </div>
