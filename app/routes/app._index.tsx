@@ -316,7 +316,7 @@ function NewEntryForm() {
     <tr style={{ backgroundColor: "#f0f8ff", borderBottom: "2px solid #cce5ff" }}>
       <td style={{...styles.cell, color: "#005bd3", fontWeight: "bold", borderLeft: "4px solid #005bd3"}}>Nouveau</td>
       <td style={styles.cell}><input disabled={isCreating} type="text" name="identification" placeholder="Ref *" required value={formData.identification} onChange={e => setFormData({...formData, identification: e.target.value})} style={styles.input} /></td>
-      <td style={styles.cell}><input disabled={isCreating} type="text" name="name" placeholder="NOM Prénom *" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={styles.input} /></td>
+      <td style={styles.cell}><input disabled={isCreating} type="text" name="name" placeholder="Prénom NOM *" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={styles.input} /></td>
       <td style={styles.cell}><input disabled={isCreating} type="email" name="email" placeholder="Email *" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} style={styles.input} /></td>
       
       <td style={{...styles.cellPromo, ...borderLeftSep}}><input disabled={isCreating} type="text" name="code" placeholder="Code *" required value={formData.code} onChange={e => setFormData({...formData, code: e.target.value})} style={{...styles.input, ...promoInputBg}} /></td>
@@ -448,7 +448,7 @@ export default function Index() {
                   <tr style={{ backgroundColor: "white", borderBottom: "2px solid #eee" }}>
                     <th style={{...thStyle, width: "80px"}}>ID</th>
                     <th style={thStyle}>Ref Interne</th>
-                    <th style={thStyle}>NOM Prénom</th>
+                    <th style={thStyle}>Prénom NOM</th>
                     <th style={thStyle}>Email</th>
                     
                     <th style={{...thPromoStyle, ...thPromoBorder}}>Code Promo</th>

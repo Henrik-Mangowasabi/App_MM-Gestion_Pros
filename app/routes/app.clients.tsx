@@ -4,31 +4,34 @@ import React, { useState } from "react";
 import { authenticate } from "../shopify.server";
 import { getMetaobjectEntries, checkMetaobjectStatus } from "../lib/metaobject.server";
 
-// --- LE MOTEUR OPTIMISÉ (NE TOUCHE PAS) ---
 export const loader = async ({ request }: any) => {
   const { admin } = await authenticate.admin(request);
   
   const status = await checkMetaobjectStatus(admin);
-  if (!status.exists) return { entries: [], isInitialized: false };
+  if (!status.exists) return { clients: [], isInitialized: false };
 
-  const { entries } = await getMetaobjectEntries(admin);
+  // SÉCURITÉ : On s'assure que entries est toujours un tableau
+  const result = await getMetaobjectEntries(admin);
+  const entries = result.entries || [];
 
-  // 1. IDs
+  if (entries.length === 0) return { clients: [], isInitialized: true };
+
   const customerIds = entries
     .map((e: any) => e.customer_id)
     .filter((id: string) => id && id.startsWith("gid://shopify/Customer/"));
 
-  const nameMap = new Map<string, string>();
-  
-  // 2. Fetch Noms
+  const customerMap = new Map<string, any>();
+
   if (customerIds.length > 0) {
     const query = `#graphql
-      query getCustomerNames($ids: [ID!]!) {
+      query getCustomersDetails($ids: [ID!]!) {
         nodes(ids: $ids) {
           ... on Customer {
             id
             firstName
             lastName
+            email
+            metafield(namespace: "custom", key: "credit_used") { value }
           }
         }
       }
@@ -37,36 +40,39 @@ export const loader = async ({ request }: any) => {
         const response = await admin.graphql(query, { variables: { ids: customerIds } });
         const data = await response.json();
         const nodes = data.data?.nodes || [];
-        nodes.forEach((node: any) => {
-            if (node) {
-               // --- FIX "null null" ---
-               const f = node.firstName || "";
-               const l = node.lastName || "";
-               const full = `${f} ${l}`.trim();
-               if (full && full !== "null null") {
-                   nameMap.set(node.id, full);
-               }
-            }
-        });
-    } catch (e) {
-        console.error("Erreur récupération noms clients", e);
-    }
+        nodes.forEach((n: any) => { if (n) customerMap.set(n.id, n); });
+    } catch (e) { console.error("Erreur Bulk Customers", e); }
   }
 
-  // 3. Fallback Solide
-  const enrichedEntries = entries.map((entry: any) => ({
-      ...entry,
-      // Si on a un nom Shopify, on le met. Sinon on met le nom de l'entrée.
-      displayName: nameMap.get(entry.customer_id) || entry.name
-  }));
+  const combinedData = entries.map((entry: any) => {
+      const shopifyCustomer = customerMap.get(entry.customer_id);
+      
+      const totalRevenue = entry.cache_revenue ? parseFloat(entry.cache_revenue) : 0;
+      const ordersCount = entry.cache_orders_count ? parseInt(entry.cache_orders_count) : 0;
+      const creditEarned = Math.floor(totalRevenue / 500) * 10;
+      const creditUsed = shopifyCustomer?.metafield?.value ? parseFloat(shopifyCustomer.metafield.value) : 0;
+      const creditRemaining = creditEarned - creditUsed;
 
-  return { entries: enrichedEntries, isInitialized: true };
+      return {
+          id: entry.customer_id || entry.id,
+          firstName: shopifyCustomer?.firstName || entry.name.split(" ")[0], // Fallback
+          lastName: shopifyCustomer?.lastName || entry.name.split(" ").slice(1).join(" "),
+          email: shopifyCustomer?.email || entry.email,
+          linkedCode: entry.code,
+          ordersCount: ordersCount,
+          totalRevenue: totalRevenue,
+          creditEarned,
+          creditUsed,
+          creditRemaining
+      };
+  });
+
+  return { clients: combinedData, isInitialized: true };
 };
 
 // Helper ID
 const extractId = (gid: string) => gid ? gid.split("/").pop() : "";
 
-// --- L'INTERFACE ORIGINALE (RESTITUÉE) ---
 export default function ClientsPage() {
   const { clients, isInitialized } = useLoaderData<typeof loader>();
 
@@ -81,18 +87,22 @@ export default function ClientsPage() {
       );
   }
 
+  // SÉCURITÉ CLIENT : Empêcher le crash si clients est undefined
+  const safeClients = clients || [];
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 25;
-  const totalPages = Math.ceil(clients.length / itemsPerPage);
-  const currentClients = clients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(safeClients.length / itemsPerPage);
+  const currentClients = safeClients.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // STYLES D'ORIGINE
+  // --- STYLES RESTAURÉS ---
   const styles = {
     wrapper: { width: "100%", padding: "20px", backgroundColor: "#f6f6f7", fontFamily: "-apple-system, sans-serif", boxSizing: "border-box" as const },
     navButton: { textDecoration: "none", color: "#008060", fontWeight: "600", backgroundColor: "white", border: "1px solid #c9cccf", padding: "8px 16px", borderRadius: "4px", fontSize: "0.9rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", display: "flex", alignItems: "center", gap: "6px", transition: "all 0.2s ease" },
     infoDetails: { marginBottom: "20px", backgroundColor: "white", borderRadius: "8px", border: "1px solid #e1e3e5", borderLeft: "4px solid #008060", boxShadow: "0 2px 4px rgba(0,0,0,0.05)", overflow: "hidden" },
     infoSummary: { padding: "12px 20px", cursor: "pointer", fontWeight: "600", color: "#444", outline: "none", listStyle: "none" },
     
+    // CELLULES AVEC COULEURS
     cell: { padding: "16px 12px", fontSize: "0.9rem", verticalAlign: "middle", borderBottom: "1px solid #eee" },
     cellCenter: { padding: "16px 12px", fontSize: "0.9rem", verticalAlign: "middle", borderBottom: "1px solid #eee", textAlign: "center" as const },
     cellPromo: { padding: "16px 12px", fontSize: "0.9rem", verticalAlign: "middle", borderBottom: "1px solid #e1e3e5", textAlign: "center" as const },
@@ -108,11 +118,11 @@ export default function ClientsPage() {
   };
 
   const containerMaxWidth = "1600px";
-  
+
   const thStyle = { padding: "12px 10px", textAlign: "left" as const, fontSize: "0.8rem", textTransform: "uppercase" as const, color: "#888" };
   const thCenter = { ...thStyle, textAlign: "center" as const };
-  const thPromoStyle = { ...thStyle, textAlign: "center" as const, backgroundColor: "#f1f8f5", color: "#008060", borderBottom: "2px solid #e1e3e5", borderLeft: "2px solid #e1e3e5" }; 
-  const thPerfStyle = { ...thStyle, textAlign: "center" as const, backgroundColor: "#f0f8ff", color: "#005bd3", borderBottom: "2px solid #b8d0eb", borderLeft: "2px solid #b8d0eb" }; 
+  const thPromoStyle = { ...thStyle, textAlign: "center" as const, backgroundColor: "#f1f8f5", color: "#008060", borderBottom: "2px solid #e1e3e5", borderLeft: "2px solid #e1e3e5" };
+  const thPerfStyle = { ...thStyle, textAlign: "center" as const, backgroundColor: "#f0f8ff", color: "#005bd3", borderBottom: "2px solid #b8d0eb", borderLeft: "2px solid #b8d0eb" };
   const thCreditStyle = { ...thStyle, textAlign: "center" as const, backgroundColor: "#f9f4ff", color: "#9c6ade", borderBottom: "2px solid #e6dff0", borderLeft: "2px solid #e6dff0" };
 
   return (
@@ -142,7 +152,7 @@ export default function ClientsPage() {
         <div style={{ backgroundColor: "white", borderRadius: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.05)", overflow: "hidden" }}>
           
           <div style={{ padding: "20px 24px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fafafa" }}>
-            <h2 style={{ margin: 0, color: "#444", fontSize: "1.1rem", fontWeight: "600" }}>Liste des Clients Pros ({clients.length})</h2>
+            <h2 style={{ margin: 0, color: "#444", fontSize: "1.1rem", fontWeight: "600" }}>Liste des Clients Pros ({safeClients.length})</h2>
           </div>
 
           <div style={{ overflowX: "auto" }}>
@@ -152,12 +162,9 @@ export default function ClientsPage() {
                   <th style={{...thStyle, width: "20%"}}>Nom Pro</th>
                   <th style={{...thStyle, width: "20%"}}>Email</th>
                   <th style={{...thCenter, width: "5%"}}>Lien</th>
-                  
                   <th style={{...thPromoStyle, width: "10%"}}>Code Promo</th>
-                  
                   <th style={{...thPerfStyle, width: "7.5%"}}>Com.</th>
                   <th style={{...thPerfStyle, width: "10%"}}>CA Généré</th>
-                  
                   <th style={{...thCreditStyle, width: "9%"}}>Gagné</th>
                   <th style={{...thCreditStyle, width: "9%"}}>Utilisé</th>
                   <th style={{...thCreditStyle, width: "9.5%", fontWeight: "800"}}>RESTANT</th>
@@ -219,7 +226,7 @@ export default function ClientsPage() {
             </table>
           </div>
 
-          {clients.length > itemsPerPage && (
+          {safeClients.length > itemsPerPage && (
             <div style={styles.paginationContainer}>
               <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} style={currentPage === 1 ? styles.pageBtnDisabled : styles.pageBtn}>← Précédent</button>
               <span style={{ fontSize: "0.9rem", color: "#555" }}>Page <strong>{currentPage}</strong> sur <strong>{totalPages || 1}</strong></span>
