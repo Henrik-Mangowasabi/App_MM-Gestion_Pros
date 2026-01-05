@@ -14,6 +14,7 @@ RUN npm ci && npm cache clean --force
 COPY . .
 
 # Faire le build (nécessite les devDependencies)
+RUN npx prisma generate
 RUN npm run build
 
 # Supprimer les devDependencies après le build pour réduire la taille
