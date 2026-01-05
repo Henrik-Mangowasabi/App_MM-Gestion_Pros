@@ -1,6 +1,20 @@
 // FICHIER : app/routes/webhooks.orders.create.tsx
-import type { ActionFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
+
+// Loader pour gérer les requêtes GET (tests de connectivité)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const loader = async (_args: LoaderFunctionArgs) => {
+  console.log(`ℹ️ Requête GET reçue sur le webhook orders/create. Ceci est normal pour un test de connectivité.`);
+  return new Response(JSON.stringify({ 
+    message: "Webhook orders/create endpoint", 
+    method: "Use POST to trigger webhook",
+    registered: true 
+  }), { 
+    status: 200, 
+    headers: { "Content-Type": "application/json" } 
+  });
+};
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   // Log IMMÉDIAT pour voir si la route est appelée
@@ -8,18 +22,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   console.log(`🚨 Méthode: ${request.method}`);
   console.log(`🚨 URL: ${request.url}`);
   console.log(`🚨 Headers:`, Object.fromEntries(request.headers.entries()));
-  
-  // Gérer les requêtes GET (pour tests)
-  if (request.method === "GET") {
-    return new Response(JSON.stringify({ 
-      message: "Webhook orders/create endpoint", 
-      method: "Use POST to trigger webhook",
-      registered: true 
-    }), { 
-      status: 200, 
-      headers: { "Content-Type": "application/json" } 
-    });
-  }
   
   try {
     const { admin, payload, shop, session, topic } = await authenticate.webhook(request);
@@ -41,8 +43,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     
     if (!adminContext) {
       console.error("❌ Webhook: admin non disponible - Shop:", shop, "Session:", session?.id);
+      console.error("⚠️ SOLUTION: L'application doit être réinstallée sur cette boutique pour créer une session valide.");
+      console.error("⚠️ Allez dans le Shopify Partners Dashboard > Apps > Votre app > Boutiques > Réinstaller");
       // Retourner 200 pour éviter que Shopify réessaie indéfiniment
-      return new Response(JSON.stringify({ error: "Admin non disponible" }), { 
+      return new Response(JSON.stringify({ 
+        error: "Admin non disponible",
+        message: "L'application doit être réinstallée sur cette boutique pour créer une session valide.",
+        shop: shop
+      }), { 
         status: 200, 
         headers: { "Content-Type": "application/json" } 
       });
