@@ -92,8 +92,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       const newRevenue = currentRevenue + orderAmount;
       const newCount = currentCount + 1;
       
-      // Règle : 10€ tous les 500€ de CA (Total à vie)
-      const totalCreditShouldBe = Math.floor(newRevenue / 500) * 10;
+      // Règle : 10€ tous les 20€ de CA (Total à vie) - MODIFIÉ POUR TESTS
+      const totalCreditShouldBe = Math.floor(newRevenue / 20) * 10;
 
       // 3. Calcul du montant à verser (Le Delta)
       const amountToDeposit = totalCreditShouldBe - previousCreditEarned;

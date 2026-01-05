@@ -49,7 +49,7 @@ export const loader = async ({ request }: any) => {
       
       const totalRevenue = entry.cache_revenue ? parseFloat(entry.cache_revenue) : 0;
       const ordersCount = entry.cache_orders_count ? parseInt(entry.cache_orders_count) : 0;
-      const creditEarned = Math.floor(totalRevenue / 500) * 10;
+      const creditEarned = Math.floor(totalRevenue / 20) * 10; // MODIFIÉ POUR TESTS : 20€ au lieu de 500€
       const creditUsed = shopifyCustomer?.metafield?.value ? parseFloat(shopifyCustomer.metafield.value) : 0;
       const creditRemaining = creditEarned - creditUsed;
 
@@ -144,7 +144,7 @@ export default function ClientsPage() {
           <div style={{ padding: "0 20px 20px 20px", color: "#555", fontSize: "0.95rem", lineHeight: "1.5" }}>
             <p style={{marginTop: 0}}><strong>Comment est calculé le Store Credit ?</strong></p>
             <ul style={{ paddingLeft: "20px", margin: "10px 0" }}>
-                <li><strong>Règle :</strong> 10€ de crédit sont gagnés pour chaque tranche de 500€ de chiffre d'affaires généré.</li>
+                <li><strong>Règle :</strong> 10€ de crédit sont gagnés pour chaque tranche de 20€ de chiffre d&apos;affaires généré. (Seuil modifié pour les tests)</li>
             </ul>
           </div>
         </details>
