@@ -1,182 +1,286 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-<head>
-    <meta charset="UTF-8">
+  <head>
+    <meta charset="UTF-8" />
     <title>Documentation Technique - Gestion Pros Jollymama</title>
     <style>
-        :root {
-            --primary: #008060; /* Vert Shopify */
-            --secondary: #005bd3; /* Bleu Admin */
-            --danger: #d82c0d;
-            --light: #f6f6f7;
-            --border: #e1e3e5;
-            --text: #202223;
-        }
+      :root {
+        --primary: #008060; /* Vert Shopify */
+        --secondary: #005bd3; /* Bleu Admin */
+        --danger: #d82c0d;
+        --light: #f6f6f7;
+        --border: #e1e3e5;
+        --text: #202223;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+          Arial, sans-serif;
+        color: var(--text);
+        line-height: 1.6;
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 40px;
+        background: white;
+      }
+      /* Header */
+      header {
+        border-bottom: 2px solid var(--border);
+        padding-bottom: 20px;
+        margin-bottom: 40px;
+      }
+      h1 {
+        margin: 0;
+        color: var(--text);
+        font-size: 28px;
+      }
+      .subtitle {
+        color: #6d7175;
+        font-size: 16px;
+        margin-top: 5px;
+      }
+      .tag {
+        background: #e3f1df;
+        color: var(--primary);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        text-transform: uppercase;
+        border: 1px solid #b7eb8f;
+      }
+
+      /* Sections */
+      /* MODIFICATION ICI : On autorise la coupure des sections */
+      section {
+        margin-bottom: 40px;
+      }
+
+      h2 {
+        color: var(--secondary);
+        font-size: 20px;
+        border-left: 4px solid var(--secondary);
+        padding-left: 10px;
+        margin-bottom: 15px;
+        /* On évite juste qu'un titre se retrouve tout seul en bas de page */
+        page-break-after: avoid;
+      }
+      h3 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-top: 20px;
+        color: #444;
+      }
+
+      /* Listes & Logique */
+      ul {
+        padding-left: 20px;
+      }
+      li {
+        margin-bottom: 8px;
+      }
+
+      .logic-step {
+        background: var(--light);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 15px;
+        margin-top: 10px;
+        /* On garde l'interdiction de coupure uniquement pour les petits blocs gris */
+        page-break-inside: avoid;
+      }
+      .logic-step strong {
+        color: var(--primary);
+      }
+
+      /* Badges techniques */
+      code {
+        background: #f0f0f0;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-family: monospace;
+        color: #d63384;
+        font-size: 0.9em;
+      }
+      .badge-pro {
+        background: #e4e5e7;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-family: monospace;
+      }
+
+      /* Footer */
+      footer {
+        margin-top: 50px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+        text-align: center;
+        font-size: 12px;
+        color: #8c9196;
+      }
+
+      @media print {
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            color: var(--text);
-            line-height: 1.6;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 40px;
-            background: white;
+          padding: 0;
+          max-width: 100%;
         }
-        /* Header */
-        header {
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 20px;
-            margin-bottom: 40px;
+        /* Optimisation saut de page */
+        h2 {
+          margin-top: 30px;
         }
-        h1 { margin: 0; color: var(--text); font-size: 28px; }
-        .subtitle { color: #6d7175; font-size: 16px; margin-top: 5px; }
-        .tag {
-            background: #e3f1df; color: var(--primary); 
-            padding: 2px 8px; border-radius: 4px; 
-            font-size: 12px; font-weight: bold; text-transform: uppercase;
-            border: 1px solid #b7eb8f;
-        }
-
-        /* Sections */
-        /* MODIFICATION ICI : On autorise la coupure des sections */
-        section { margin-bottom: 40px; }
-        
-        h2 { 
-            color: var(--secondary); 
-            font-size: 20px; 
-            border-left: 4px solid var(--secondary); 
-            padding-left: 10px; margin-bottom: 15px; 
-            /* On évite juste qu'un titre se retrouve tout seul en bas de page */
-            page-break-after: avoid; 
-        }
-        h3 { font-size: 16px; font-weight: 700; margin-top: 20px; color: #444; }
-
-        /* Listes & Logique */
-        ul { padding-left: 20px; }
-        li { margin-bottom: 8px; }
-        
-        .logic-step {
-            background: var(--light);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 15px;
-            margin-top: 10px;
-            /* On garde l'interdiction de coupure uniquement pour les petits blocs gris */
-            page-break-inside: avoid; 
-        }
-        .logic-step strong { color: var(--primary); }
-
-        /* Badges techniques */
-        code {
-            background: #f0f0f0;
-            padding: 2px 5px;
-            border-radius: 4px;
-            font-family: monospace;
-            color: #d63384;
-            font-size: 0.9em;
-        }
-        .badge-pro { background: #e4e5e7; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-family: monospace; }
-
-        /* Footer */
-        footer {
-            margin-top: 50px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            font-size: 12px;
-            color: #8c9196;
-        }
-
-        @media print {
-            body { padding: 0; max-width: 100%; }
-            /* Optimisation saut de page */
-            h2 { margin-top: 30px; }
-        }
+      }
     </style>
-</head>
-<body>
-
-<header>
-    <h1>📘 Documentation Technique & Fonctionnelle</h1>
-    <div class="subtitle">Application : <strong>App MM - Gestion Pros - JM</strong></div>
-    <div style="margin-top:10px;">
+  </head>
+  <body>
+    <header>
+      <h1>📘 Documentation Technique & Fonctionnelle</h1>
+      <div class="subtitle">
+        Application : <strong>Basilic App - Gestion Pros - JM</strong>
+      </div>
+      <div style="margin-top: 10px">
         <span class="tag">Version 3.1</span>
-        <span class="tag" style="color:#005bd3; background:#f0f8ff; border-color:#b8d0eb;">Production</span>
-        <span class="tag" style="color:#5c5f62; background:#f6f6f7; border-color:#d2d5d8;">Hébergement : Render</span>
-    </div>
-</header>
+        <span
+          class="tag"
+          style="color: #005bd3; background: #f0f8ff; border-color: #b8d0eb"
+          >Production</span
+        >
+        <span
+          class="tag"
+          style="color: #5c5f62; background: #f6f6f7; border-color: #d2d5d8"
+          >Hébergement : Render</span
+        >
+      </div>
+    </header>
 
-<section>
-    <h2>1. Infrastructure & Concept Global</h2>
-    <p>L'application est une <strong>Shopify App Custom</strong> hébergée sur Render. Elle automatise la relation entre Jollymama et ses partenaires "Pros de Santé" via une synchronisation bidirectionnelle entre l'Application, les Metaobjects Shopify et les Clients Shopify.</p>
-    <div class="logic-step">
-        <strong>Nouveauté V3 :</strong> Gestion dynamique des seuils de gains et ajout des champs de qualification (Profession & Adresse).
-    </div>
-</section>
+    <section>
+      <h2>1. Infrastructure & Concept Global</h2>
+      <p>
+        L'application est une <strong>Shopify App Custom</strong> hébergée sur
+        Render. Elle automatise la relation entre Jollymama et ses partenaires
+        "Pros de Santé" via une synchronisation bidirectionnelle entre
+        l'Application, les Metaobjects Shopify et les Clients Shopify.
+      </p>
+      <div class="logic-step">
+        <strong>Nouveauté V3 :</strong> Gestion dynamique des seuils de gains et
+        ajout des champs de qualification (Profession & Adresse).
+      </div>
+    </section>
 
-<section>
-    <h2>2. Cycle de Vie des Données & Synchronisation</h2>
-    <p>Le système assure une cohérence parfaite entre votre base de données et l'administration Shopify.</p>
+    <section>
+      <h2>2. Cycle de Vie des Données & Synchronisation</h2>
+      <p>
+        Le système assure une cohérence parfaite entre votre base de données et
+        l'administration Shopify.
+      </p>
 
-    <h3>🔹 A. Initialisation (Reset & Setup)</h3>
-    <ul>
-        <li><strong>Structure Métaobjet :</strong> Création automatique de la base de données dans Shopify.</li>
-        <li><strong>Métafields Clients :</strong> L'app enregistre automatiquement les définitions de métafields <code>custom.profession</code> et <code>custom.adresse</code> dans votre admin Shopify pour une visibilité totale sur les fiches clients.</li>
-    </ul>
+      <h3>🔹 A. Initialisation (Reset & Setup)</h3>
+      <ul>
+        <li>
+          <strong>Structure Métaobjet :</strong> Création automatique de la base
+          de données dans Shopify.
+        </li>
+        <li>
+          <strong>Métafields Clients :</strong> L'app enregistre automatiquement
+          les définitions de métafields <code>custom.profession</code> et
+          <code>custom.adresse</code> dans votre admin Shopify pour une
+          visibilité totale sur les fiches clients.
+        </li>
+      </ul>
 
-    <h3>🔹 B. Création & Sync Partenaire</h3>
-    <div class="logic-step">
+      <h3>🔹 B. Création & Sync Partenaire</h3>
+      <div class="logic-step">
         Lors de l'ajout d'un pro :
         <ol>
-            <li><strong>Code Promo :</strong> Création automatique de la réduction Shopify.</li>
-            <li><strong>Fiche Client Shopify :</strong>
-                <ul>
-                    <li>Ajout du tag <span class="badge-pro">pro_sante</span>.</li>
-                    <li>Synchronisation du <strong>Nom</strong> et de l'<strong>Email</strong>.</li>
-                    <li>Synchronisation des nouveaux champs <strong>Profession</strong> et <strong>Adresse</strong> directement dans les métafields du client.</li>
-                </ul>
-            </li>
+          <li>
+            <strong>Code Promo :</strong> Création automatique de la réduction
+            Shopify.
+          </li>
+          <li>
+            <strong>Fiche Client Shopify :</strong>
+            <ul>
+              <li>Ajout du tag <span class="badge-pro">pro_sante</span>.</li>
+              <li>
+                Synchronisation du <strong>Nom</strong> et de
+                l'<strong>Email</strong>.
+              </li>
+              <li>
+                Synchronisation des nouveaux champs
+                <strong>Profession</strong> et
+                <strong>Adresse</strong> directement dans les métafields du
+                client.
+              </li>
+            </ul>
+          </li>
         </ol>
-    </div>
+      </div>
 
-    <h3>🔹 C. Modification & Suppression</h3>
-    <ul>
-        <li><strong>Update :</strong> Toute modification (Nom, Email, Profession, Adresse) est immédiatement répercutée sur le compte client Shopify associé.</li>
-        <li><strong>Delete :</strong> Le code promo est supprimé, le tag <span class="badge-pro">pro_sante</span> est retiré du client, mais la fiche client reste dans Shopify (sans les privilèges pro).</li>
-    </ul>
-</section>
+      <h3>🔹 C. Modification & Suppression</h3>
+      <ul>
+        <li>
+          <strong>Update :</strong> Toute modification (Nom, Email, Profession,
+          Adresse) est immédiatement répercutée sur le compte client Shopify
+          associé.
+        </li>
+        <li>
+          <strong>Delete :</strong> Le code promo est supprimé, le tag
+          <span class="badge-pro">pro_sante</span> est retiré du client, mais la
+          fiche client reste dans Shopify (sans les privilèges pro).
+        </li>
+      </ul>
+    </section>
 
-<section>
-    <h2>3. Système de Crédit Dynamique (Réglages)</h2>
-    <p>Contrairement aux versions précédentes, les règles de calcul ne sont plus figées dans le code. Vous avez maintenant le contrôle total depuis le tableau de bord.</p>
+    <section>
+      <h2>3. Système de Crédit Dynamique (Réglages)</h2>
+      <p>
+        Contrairement aux versions précédentes, les règles de calcul ne sont
+        plus figées dans le code. Vous avez maintenant le contrôle total depuis
+        le tableau de bord.
+      </p>
 
-    <div class="logic-step">
-        <strong>⚙️ Configuration Personnalisable :</strong><br>
-        Vous définissez vous-même le <strong>Seuil (CA requis)</strong> et le <strong>Montant du Crédit</strong> offert.
-        <br><em>Exemple : Gagner 10€ tous les 500€ de CA généré.</em>
-    </div>
+      <div class="logic-step">
+        <strong>⚙️ Configuration Personnalisable :</strong><br />
+        Vous définissez vous-même le <strong>Seuil (CA requis)</strong> et le
+        <strong>Montant du Crédit</strong> offert. <br /><em
+          >Exemple : Gagner 10€ tous les 500€ de CA généré.</em
+        >
+      </div>
 
-    <h3>Fonctionnement du Webhook :</h3>
-    <ol>
-        <li>Dès qu'une commande utilise un code pro, l'app récupère <strong>vos réglages actuels</strong> en base de données.</li>
+      <h3>Fonctionnement du Webhook :</h3>
+      <ol>
+        <li>
+          Dès qu'une commande utilise un code pro, l'app récupère
+          <strong>vos réglages actuels</strong> en base de données.
+        </li>
         <li>Elle calcule si un nouveau palier est franchi.</li>
-        <li>Elle crédite le compte <code>Store Credit</code> du client Shopify en temps réel.</li>
-    </ol>
-</section>
+        <li>
+          Elle crédite le compte <code>Store Credit</code> du client Shopify en
+          temps réel.
+        </li>
+      </ol>
+    </section>
 
-<section>
-    <h2>4. Guide des Interfaces</h2>
+    <section>
+      <h2>4. Guide des Interfaces</h2>
 
-    <h3>🏥 Gestion Pros de Santé</h3>
-    <p>Votre centre de contrôle. C'est ici que vous gérez vos partenaires et que vous réglez les paramètres de gains (Seuil/Crédit).</p>
+      <h3>🏥 Gestion Pros de Santé</h3>
+      <p>
+        Votre centre de contrôle. C'est ici que vous gérez vos partenaires et
+        que vous réglez les paramètres de gains (Seuil/Crédit).
+      </p>
 
-    <h3>👥 Gestion Clients Pros (Reporting)</h3>
-    <p>Vue détaillée des performances. Affiche désormais la <strong>Profession</strong> et l'<strong>Adresse</strong> de chaque partenaire pour une meilleure segmentation, en plus de l'état précis de leurs crédits (Gagné / Utilisé / Restant).</p>
-</section>
+      <h3>👥 Gestion Clients Pros (Reporting)</h3>
+      <p>
+        Vue détaillée des performances. Affiche désormais la
+        <strong>Profession</strong> et l'<strong>Adresse</strong> de chaque
+        partenaire pour une meilleure segmentation, en plus de l'état précis de
+        leurs crédits (Gagné / Utilisé / Restant).
+      </p>
+    </section>
 
-<footer>
-    Document mis à jour le 05/01/2026<br>
-    Développement & Maintenance : <strong>Antigravity AI</strong>
-</footer>
-
-</body>
+    <footer>
+      Document mis à jour le 05/01/2026<br />
+      Développement & Maintenance : <strong>Antigravity AI</strong>
+    </footer>
+  </body>
 </html>
