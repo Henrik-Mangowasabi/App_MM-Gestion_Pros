@@ -8,7 +8,9 @@ import {
   useSubmit,
   useNavigation,
   Link,
+  useRevalidator,
 } from "react-router";
+import { Pagination } from "../components/Pagination";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
 import {
@@ -23,6 +25,7 @@ import {
 import { createCustomerMetafieldDefinitions } from "../lib/customer.server";
 
 import prisma from "../db.server";
+import * as XLSX from "xlsx";
 
 // --- LOADER ---
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -213,6 +216,204 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return redirect(url.pathname + url.search);
     }
     return { error: result.error || "Erreur suppression" };
+  }
+
+  if (actionType === "import_file") {
+    console.log("📂 Démarrage Import Fichier...");
+    const file = formData.get("file") as File;
+    if (!file || file.size === 0) return { error: "Aucun fichier fourni." };
+
+    try {
+      const buffer = await file.arrayBuffer();
+      // On lit le buffer avec XLSX
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const items: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+
+      console.log(`📂 Fichier lu. ${items.length} lignes trouvées.`);
+
+      // Récupération des existants pour éviter doublons (Codes et Refs internes)
+      const existingResult = await getMetaobjectEntries(admin);
+      const existingCodes = new Set(
+        existingResult.entries.map((e: any) => e.code?.toLowerCase().trim()),
+      );
+      const existingRefs = new Set(
+        existingResult.entries.map((e: any) =>
+          e.identification?.toLowerCase().trim(),
+        ),
+      );
+
+      let added = 0;
+      let skipped = 0;
+      let duplicates: string[] = [];
+      let errors: string[] = [];
+
+      // Nettoyage: Encodage + Suppression des sauts de ligne (interdits par Shopify)
+      const cleanInput = (str: string) => {
+        let res = str;
+        try {
+          if (res.includes("Ã©") || res.includes("Ã¨") || res.includes("Ã")) {
+            res = decodeURIComponent(escape(res));
+          }
+        } catch (e) {}
+        // Remplace les retours à la ligne par des espaces pour éviter l'erreur "single line text string"
+        return res.replace(/[\r\n]+/g, " ").trim();
+      };
+
+      // Traitement Séquentiel
+      for (const item of items) {
+        // Normalisation des clés : On enlève les accents pour matcher "Prénom" avec "prenom"
+        // On crée une map qui contient à la fois la clé brute, et la clé sans accent
+        const keys = Object.keys(item).reduce((acc: any, key) => {
+          const val = item[key];
+          // Clé 1: minuscules + trim (ex: "prénom nom")
+          acc[key.toLowerCase().trim()] = val;
+          // Clé 2: sans accents (ex: "prenom nom")
+          const noAccentKey = key
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+          acc[noAccentKey] = val;
+          return acc;
+        }, {});
+
+        // Mapping intelligent des colonnes (Compatible avec vos en-têtes exacts)
+        const ref = cleanInput(
+          String(
+            keys["ref interne"] ||
+              keys.ref ||
+              keys.reference ||
+              keys.id ||
+              keys.identification ||
+              "",
+          ),
+        );
+        const name = cleanInput(
+          String(
+            keys["prénom nom"] ||
+              keys["prenom nom"] ||
+              keys.nom ||
+              keys.name ||
+              keys.prénom ||
+              keys.prenom ||
+              "",
+          ),
+        );
+        const email = String(
+          keys.email || keys.mail || keys.courriel || "",
+        ).trim();
+        const code = String(
+          keys.code || keys["code promo"] || keys.promo || "",
+        ).trim();
+
+        const montantRaw = keys.montant || keys.amount || keys.valeur || "0";
+        const typeRaw = String(keys.type || "%");
+
+        const profession = cleanInput(
+          String(
+            keys.profession || keys.job || keys.métier || keys.metier || "",
+          ),
+        );
+        const adresse = cleanInput(
+          String(keys.adresse || keys.address || keys.ville || ""),
+        );
+        // On prend ce qu'on a
+
+        // Vérif données minimales
+        if (!ref) {
+          // On ignore les lignes vides silencieusement
+          if (!name && !email && !code) continue;
+          errors.push(`Ligne ignorée (Ref manquante) : ${name || "Sans nom"}`);
+          continue;
+        }
+        if (!name || !email || !code) {
+          errors.push(
+            `Données incomplètes pour Ref ${ref} : ${!name ? "Nom manquant" : ""} ${!email ? "Email manquant" : ""} ${!code ? "Code manquant" : ""}`,
+          );
+          continue;
+        }
+
+        // Vérification doublons stricte (Ref ou Code)
+        if (existingCodes.has(code.toLowerCase())) {
+          skipped++;
+          duplicates.push(`${name} (Code existant: ${code})`);
+          continue;
+        }
+        if (existingRefs.has(ref.toLowerCase())) {
+          skipped++;
+          duplicates.push(`${name} (Ref existante: ${ref})`);
+          continue;
+        }
+
+        // Préparation des valeurs
+        const montant = parseFloat(String(montantRaw).replace(",", "."));
+        const type =
+          typeRaw.includes("€") || typeRaw.toLowerCase().includes("eur")
+            ? "€"
+            : "%";
+
+        console.log(`➕ Import en cours : ${name} (${code})`);
+
+        // Appel de création
+        const result = await createMetaobjectEntry(admin, {
+          identification: ref,
+          name,
+          email,
+          code,
+          montant,
+          type,
+          profession,
+          adresse,
+        });
+
+        if (result.success) {
+          added++;
+          existingCodes.add(code.toLowerCase());
+          existingRefs.add(ref.toLowerCase());
+        } else {
+          let niceError = String(result.error);
+          if (niceError.includes("single line text string")) {
+            niceError =
+              "Format invalide (Sauts de ligne interdits). L'adresse ou la profession doit être sur une seule ligne.";
+          }
+          errors.push(`Erreur pour ${name} : ${niceError}`);
+        }
+      }
+
+      return {
+        success: "import_completed",
+        report: { added, skipped, duplicates, errors },
+      };
+    } catch (e) {
+      console.error("Erreur Import:", e);
+      return { error: "Erreur lecture fichier : " + String(e) };
+    }
+  }
+
+  if (actionType === "api_create_partner") {
+    const identification = String(formData.get("identification"));
+    const name = String(formData.get("name"));
+    const email = String(formData.get("email"));
+    const code = String(formData.get("code"));
+    const montant = parseFloat(String(formData.get("montant")));
+    const type = String(formData.get("type"));
+    const profession = String(formData.get("profession"));
+    const adresse = String(formData.get("adresse"));
+
+    const result = await createMetaobjectEntry(admin, {
+      identification,
+      name,
+      email,
+      code,
+      montant,
+      type,
+      profession,
+      adresse,
+    });
+
+    // Retour direct pour RR7
+    return result;
   }
 
   return { error: "Action inconnue" };
@@ -691,18 +892,13 @@ function EntryRow({
                     return;
                   }
                   const confirm1 = confirm(
-                    "ATTENTION ULTIME : \n\nVous allez supprimer ce partenaire et son code promo.",
+                    "ATTENTION : \n\nVous allez supprimer ce partenaire et son code promo. Continuer ?",
                   );
                   if (!confirm1) {
                     e.preventDefault();
                     return;
                   }
-                  const validation = prompt(
-                    "Pour confirmer, tapez le mot 'DELETE' en majuscules ci-dessous :",
-                  );
-                  if (validation !== "DELETE") {
-                    e.preventDefault();
-                  }
+                  // Plus de prompt "DELETE" ici, le mot de passe global suffit
                 }}
               >
                 <input type="hidden" name="action" value="delete_entry" />
@@ -1029,6 +1225,396 @@ function SettingsForm({
   );
 }
 
+// --- COMPOSANT IMPORT RESULT ---
+function ImportResult({ report }: { report: any }) {
+  if (!report) return null;
+  return (
+    <div
+      style={{
+        padding: "15px",
+        backgroundColor: "white",
+        borderRadius: "8px",
+        border: "1px solid #c9cccf",
+        marginBottom: "20px",
+        boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+      }}
+    >
+      <h3
+        style={{
+          marginTop: 0,
+          fontSize: "1rem",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+        }}
+      >
+        📊 Rapport d&apos;import
+      </h3>
+
+      <div
+        style={{
+          display: "flex",
+          gap: "20px",
+          flexWrap: "wrap",
+          marginBottom: "15px",
+        }}
+      >
+        <div style={{ color: "#008060", fontWeight: "bold" }}>
+          ✅ {report.added} importés
+        </div>
+        <div style={{ color: "#d97900", fontWeight: "bold" }}>
+          ⚠️ {report.skipped} doublons ignorés
+        </div>
+        {report.errors.length > 0 && (
+          <div style={{ color: "#d82c0d", fontWeight: "bold" }}>
+            ❌ {report.errors.length} erreurs
+          </div>
+        )}
+      </div>
+
+      {report.duplicates.length > 0 && (
+        <details style={{ marginBottom: "10px" }}>
+          <summary
+            style={{ cursor: "pointer", color: "#666", fontSize: "0.9rem" }}
+          >
+            Voir les doublons ({report.duplicates.length})
+          </summary>
+          <ul
+            style={{
+              fontSize: "0.85rem",
+              color: "#666",
+              backgroundColor: "#fafafa",
+              padding: "10px 25px",
+              borderRadius: "4px",
+              maxHeight: "150px",
+              overflowY: "auto",
+            }}
+          >
+            {report.duplicates.map((d: string, i: number) => (
+              <li key={i}>{d}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {report.errors.length > 0 && (
+        <details open>
+          <summary
+            style={{
+              cursor: "pointer",
+              color: "#d82c0d",
+              fontSize: "0.9rem",
+              fontWeight: "bold",
+            }}
+          >
+            Voir les erreurs ({report.errors.length})
+          </summary>
+          <ul
+            style={{
+              fontSize: "0.85rem",
+              color: "#d82c0d",
+              backgroundColor: "#fff5f5",
+              padding: "10px 25px",
+              borderRadius: "4px",
+            }}
+          >
+            {report.errors.map((e: string, i: number) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+// --- FORMULAIRE D'IMPORT ---
+// --- FORMULAIRE D'IMPORT ---
+// --- FORMULAIRE D'IMPORT (Client-Side Logic pour barre de progression) ---
+function ImportForm({ existingEntries }: { existingEntries: any[] }) {
+  const [fileCount, setFileCount] = useState<number | null>(null);
+  const [parsedItems, setParsedItems] = useState<any[]>([]);
+
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState(0); // Nombre traités
+  const [totalToProcess, setTotalToProcess] = useState(0);
+
+  const [report, setReport] = useState<any>(null);
+
+  // Helper de nettoyage (identique au serveur)
+  const cleanInput = (str: string) => {
+    let res = str;
+    try {
+      if (res.includes("Ã©") || res.includes("Ã¨") || res.includes("Ã")) {
+        res = decodeURIComponent(escape(res)); // Réparation encodage
+      }
+    } catch (e) {}
+    return res.replace(/[\r\n]+/g, " ").trim(); // Suppression sauts de ligne
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setFileCount(null);
+      setParsedItems([]);
+      return;
+    }
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: "array" });
+      const sheetName = wb.SheetNames[0];
+      const json = XLSX.utils.sheet_to_json(wb.Sheets[sheetName]);
+      setFileCount(json.length);
+      setParsedItems(json);
+      setReport(null); // Reset report
+    } catch (err) {
+      console.error("Erreur lecture pré-import", err);
+      setFileCount(null);
+    }
+  };
+
+  const runImport = async () => {
+    if (!parsedItems.length) return;
+
+    setIsProcessing(true);
+    setReport(null);
+
+    let added = 0;
+    let skipped = 0;
+    let duplicates: string[] = [];
+    let errors: string[] = [];
+
+    // Préparation Sets Locaux pour check rapide
+    const existingCodes = new Set(
+      existingEntries.map((e: any) => e.code?.toLowerCase().trim()),
+    );
+    const existingRefs = new Set(
+      existingEntries.map((e: any) => e.identification?.toLowerCase().trim()),
+    );
+
+    const itemsToProcess = [];
+
+    // 1. Parsing & Filtrage Local
+    for (const item of parsedItems) {
+      const keys = Object.keys(item).reduce((acc: any, key) => {
+        const val = item[key];
+        const cleanKey = key
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .trim();
+        acc[cleanKey] = val;
+        // mapping fallback pour vieux formats
+        acc[key.toLowerCase().trim()] = val;
+        return acc;
+      }, {});
+
+      const ref = cleanInput(
+        String(
+          keys["ref interne"] ||
+            keys.ref ||
+            keys.reference ||
+            keys.id ||
+            keys.identification ||
+            "",
+        ),
+      );
+      const name = cleanInput(
+        String(
+          keys["prénom nom"] ||
+            keys["prenom nom"] ||
+            keys.nom ||
+            keys.name ||
+            keys.prénom ||
+            keys.prenom ||
+            "",
+        ),
+      );
+      const email = String(
+        keys.email || keys.mail || keys.courriel || "",
+      ).trim();
+      const code = String(
+        keys.code || keys["code promo"] || keys.promo || "",
+      ).trim();
+
+      const montantRaw = keys.montant || keys.amount || keys.valeur || "0";
+      const typeRaw = String(keys.type || "%");
+      const montant = parseFloat(String(montantRaw).replace(",", "."));
+      const type =
+        typeRaw.includes("€") || typeRaw.toLowerCase().includes("eur")
+          ? "€"
+          : "%";
+
+      const profession = cleanInput(
+        String(keys.profession || keys.job || keys.métier || keys.metier || ""),
+      );
+      const adresse = cleanInput(
+        String(keys.adresse || keys.address || keys.ville || ""),
+      );
+
+      // Validations de base
+      if (!ref) {
+        if (name || email || code)
+          errors.push(`Ligne ignorée (Ref manquante) : ${name}`);
+        continue;
+      }
+      if (existingCodes.has(code.toLowerCase())) {
+        skipped++;
+        duplicates.push(`${name} (Code existant: ${code})`);
+        continue;
+      }
+      if (existingRefs.has(ref.toLowerCase())) {
+        skipped++;
+        duplicates.push(`${name} (Ref existante: ${ref})`);
+        continue;
+      }
+
+      itemsToProcess.push({
+        identification: ref,
+        name,
+        email,
+        code,
+        montant,
+        type,
+        profession,
+        adresse,
+      });
+    }
+
+    setTotalToProcess(itemsToProcess.length);
+    setProgress(0);
+
+    // 2. Envoi par Batch (5 items en parallèle pour optimiser)
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < itemsToProcess.length; i += BATCH_SIZE) {
+      const batch = itemsToProcess.slice(i, i + BATCH_SIZE);
+
+      // Traitement parallèle du batch
+      const batchPromises = batch.map(async (item) => {
+        const fd = new FormData();
+        fd.append("action", "api_create_partner");
+        Object.keys(item).forEach((k) => fd.append(k, (item as any)[k]));
+
+        try {
+          const res = await fetch("/app/api/import", {
+            method: "POST",
+            body: fd,
+          });
+
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`HTTP ${res.status}: ${text.substring(0, 50)}...`);
+          }
+
+          const json = await res.json();
+
+          if (json.success) {
+            added++;
+            existingCodes.add(item.code.toLowerCase());
+            existingRefs.add(item.identification.toLowerCase());
+            return { success: true, item };
+          } else {
+            let niceError = String(json.error);
+            if (niceError.includes("single line text string"))
+              niceError = "Format invalide (Sauts de ligne).";
+            errors.push(`Erreur pour ${item.name} : ${niceError}`);
+            return { success: false, item, error: niceError };
+          }
+        } catch (e) {
+          errors.push(`Erreur réseau pour ${item.name} : ${String(e)}`);
+          return { success: false, item, error: String(e) };
+        }
+      });
+
+      // Attendre que tout le batch soit terminé
+      await Promise.all(batchPromises);
+
+      // Mise à jour de la progression après chaque batch
+      setProgress(Math.min(i + BATCH_SIZE, itemsToProcess.length));
+
+      // Petit délai entre les batchs pour respecter les rate limits Shopify
+      if (i + BATCH_SIZE < itemsToProcess.length) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    setIsProcessing(false);
+    setReport({ added, skipped, duplicates, errors });
+
+    // Retourner un flag pour que le composant parent revalide
+    return added;
+  };
+
+  const revalidator = useRevalidator();
+
+  const handleImportClick = async () => {
+    const addedCount = await runImport();
+    // Revalider les données au lieu de recharger la page
+    if (addedCount && addedCount > 0) {
+      revalidator.revalidate();
+    }
+  };
+
+  return (
+    <div>
+      {report && <ImportResult report={report} />}
+
+      <p style={{ margin: "0 0 15px 0", fontSize: "0.9rem", color: "#666" }}>
+        Importez une liste de partenaires depuis un fichier Excel (.xlsx, .xls)
+        ou CSV.
+        <br />
+        <em style={{ fontSize: "0.8rem" }}>
+          Format attendu :{" "}
+          <strong>
+            Ref, Nom, Email, Code, Montant, Type, Profession, Adresse
+          </strong>
+          . Traitement optimisé par batch de 5 items.
+        </em>
+      </p>
+
+      <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
+        <input
+          type="file"
+          accept=".xlsx, .xls, .csv"
+          disabled={isProcessing}
+          onChange={handleFileChange}
+          style={{ fontSize: "0.9rem" }}
+        />
+
+        <button
+          type="button"
+          onClick={handleImportClick}
+          disabled={isProcessing || !fileCount}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: isProcessing ? "#ccc" : "#005bd3",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            cursor: isProcessing || !fileCount ? "not-allowed" : "pointer",
+            fontWeight: "600",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minWidth: "180px",
+            justifyContent: "center",
+            transition: "all 0.2s",
+          }}
+        >
+          {isProcessing ? (
+            <>
+              <Spinner /> Traitement {progress} / {totalToProcess}
+            </>
+          ) : (
+            `⚡ Importer ${fileCount !== null ? `(${fileCount})` : ""}`
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // --- PAGE PRINCIPALE ---
 export default function Index() {
   const { status, entries, config } = useLoaderData<typeof loader>();
@@ -1063,6 +1649,7 @@ export default function Index() {
     successMessage = "Tout a été effacé (Reset complet).";
   else if (successType === "config_updated")
     successMessage = "Réglages de crédit mis à jour !";
+  // On ne gère plus le success URL param pour l'import car on utilise actionData.report
   else if (actionData?.success === "config_updated")
     successMessage = "Réglages de crédit mis à jour !";
 
@@ -1124,7 +1711,13 @@ export default function Index() {
   const [error, setError] = useState("");
 
   const handleUnlock = () => {
-    if (password === "GestionPro") {
+    // Utilisation de la variable d'environnement ou fallback sur "GestionPro"
+    const adminPassword =
+      typeof process !== "undefined" && process.env?.ADMIN_PASSWORD
+        ? process.env.ADMIN_PASSWORD
+        : "GestionPro";
+
+    if (password === adminPassword) {
       setIsLocked(false);
       setShowPass(false);
       setError("");
@@ -1163,6 +1756,20 @@ export default function Index() {
         >
           Gestion des Pros de Santé
         </h1>
+
+        {actionData?.report && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: "0",
+              right: "0",
+              zIndex: 100,
+            }}
+          >
+            {/* Le rapport est affiché plus bas dans le flux principal pour ne pas cacher le titre */}
+          </div>
+        )}
 
         {status.exists && (
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -1322,6 +1929,8 @@ export default function Index() {
         </div>
       )}
 
+      {/* (L'affichage du rapport d'import global est retiré d'ici car géré localement dans ImportForm) */}
+
       {status.exists && (
         <div style={{ maxWidth: containerMaxWidth, margin: "0 auto" }}>
           <details style={styles.infoDetails}>
@@ -1380,6 +1989,17 @@ export default function Index() {
             </summary>
             <div style={{ padding: "0 20px 20px 20px" }}>
               <SettingsForm config={config} isLocked={isLocked} />
+            </div>
+          </details>
+
+          <details
+            style={{ ...styles.infoDetails, borderLeft: "4px solid #005bd3" }}
+          >
+            <summary style={styles.infoSummary}>
+              📥 Importer des Partenaires
+            </summary>
+            <div style={{ padding: "20px" }}>
+              <ImportForm existingEntries={entries} />
             </div>
           </details>
         </div>
@@ -1465,34 +2085,11 @@ export default function Index() {
             </div>
 
             {entries.length > itemsPerPage && (
-              <div style={styles.paginationContainer}>
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  style={
-                    currentPage === 1 ? styles.pageBtnDisabled : styles.pageBtn
-                  }
-                >
-                  ← Précédent
-                </button>
-                <span style={{ fontSize: "0.9rem", color: "#555" }}>
-                  Page <strong>{currentPage}</strong> sur{" "}
-                  <strong>{totalPages || 1}</strong>
-                </span>
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  style={
-                    currentPage === totalPages
-                      ? styles.pageBtnDisabled
-                      : styles.pageBtn
-                  }
-                >
-                  Suivant →
-                </button>
-              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             )}
           </div>
 
@@ -1542,8 +2139,17 @@ export default function Index() {
                       !confirm(
                         "ATTENTION ULTIME : \n\nVous allez supprimer :\n1. Tous les Pro de santé enregistrés\n2. Tous les codes promo liés\n3. Retirer le tag de tous les clients\n4. Détruire la définition du Métaobjet\n\nÊtes-vous sûr ?",
                       )
-                    )
+                    ) {
                       e.preventDefault();
+                      return;
+                    }
+                    const validation = prompt(
+                      "Pour confirmer la DESTRUCTION TOTALE, tapez le mot 'DELETE' en majuscules ci-dessous :",
+                    );
+                    if (validation !== "DELETE") {
+                      e.preventDefault();
+                      alert("Annulé : Code de sécurité incorrect.");
+                    }
                   }}
                 >
                   <input
