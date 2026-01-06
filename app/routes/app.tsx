@@ -35,10 +35,12 @@ export default function App() {
 }
 
 // Shopify needs React Router to catch some thrown responses, so that their headers are included in the response.
+// Shopify needs React Router to catch some thrown responses, so that their headers are included in the response.
 export function ErrorBoundary() {
   const error = useRouteError();
-  const { apiKey } = useLoaderData<typeof loader>();
-  
+  const loaderData = useLoaderData<typeof loader>();
+  const apiKey = loaderData?.apiKey || "";
+
   return (
     <ShopifyAppProvider embedded apiKey={apiKey}>
       <PolarisAppProvider i18n={{}}>
